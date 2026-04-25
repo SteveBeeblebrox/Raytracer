@@ -52,8 +52,8 @@ int main(int argc, const char** argv) {
             shape.material.specular = mm::vec3(json::get<json::NumberT>(entry, "material.specular[0]", 0.0f), json::get<json::NumberT>(entry, "material.specular[1]", 0.0f), json::get<json::NumberT>(entry, "material.specular[2]", 0.0f));
             shape.material.shininess = json::get<json::NumberT>(entry, "material.shininess", 0.0f);
             shape.material.reflectivity = json::get<json::NumberT>(entry, "material.reflectivity", 0.0f);
-            shape.material.indexOfRefraction = json::get<json::NumberT>(entry, "material.refraction", 0.0f);
-            shape.material.alpha = json::get<json::NumberT>(entry, "material.alpha", 0.0f);
+            shape.material.indexOfRefraction = json::get<json::NumberT>(entry, "material.refraction", 1.0f);
+            shape.material.alpha = json::get<json::NumberT>(entry, "material.alpha", 1.0f);
 
             shapes.push_back(shape);
         }
