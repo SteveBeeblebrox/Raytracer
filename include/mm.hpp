@@ -159,7 +159,7 @@ namespace mm {
             }
 
             __host__ __device__ static constexpr inline vec3 normalize(const vec3& value) {
-                return value ? value/value.length() : value;
+                return value.length() > 0.0f ? value/value.length() : value;
             }
 
             __host__ __device__ constexpr inline vec3 normalize() const {
