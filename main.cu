@@ -61,9 +61,14 @@ int main(int argc, const char** argv) {
         auto raytracer = CPURaytracer(json::get<json::NumberT>(config, "resolution[0]", 1920.0f), json::get<json::NumberT>(config, "resolution[1]", 1080.0f), json::get<json::NumberT>(config, "antialiasing", 1.0f), shapes.size(), shapes.data());
 
         Camera camera = {
-            .eye_pos = {5.0f, 5.0f, 0.0f}
+            .eye_pos = mm::vec3(
+                json::get<json::NumberT>(config, "camera.pos[0]", 5.0f),
+                json::get<json::NumberT>(config, "camera.pos[1]", 1.0f),
+                json::get<json::NumberT>(config, "camera.pos[2]", 3.0f)
+            ),
+            .vfov = (float) json::get<json::NumberT>(config, "camera.fov", 45.0f)*mm::PI/180.0f
         };
-
+        
         if(lights.size() == 0) {
             util::warn("No lights defined in '%s'!", argv[1]);
         }

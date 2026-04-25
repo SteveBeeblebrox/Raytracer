@@ -11,9 +11,8 @@ struct Ray final {
 struct Camera final {
     mm::vec3 eye_pos;
     mm::vec3 look_pos = {0.0f, 0.0f, 0.0f};
-    mm::vec3 up_vector = {0.0f, 0.0f, 0.0f};
-    float vfov = 45.0f;
-    float near_clip_plane = 0.001f;
+    mm::vec3 up_vector = {0.0f, 1.0f, 0.0f};
+    float vfov = mm::PI/4.0f;
 };
 
 struct Material final {
@@ -81,7 +80,7 @@ struct Shape final {
             case SPHERE: {
                 const mm::vec3 x = ray.origin - this->as_sphere.pos;
                 const float a = mm::vec3::dot(ray.direction, ray.direction), b = 2.0f*mm::vec3::dot(x, ray.direction), c = mm::vec3::dot(x, x) - this->as_sphere.radius*this->as_sphere.radius;
-            
+                
                 if(2.0f*a > 0.0f) {
                     const float t1 = (-b + mm::sqrt(b*b - 4*a*c))/(2.0f*a), t2 = (-b - mm::sqrt(b*b - 4*a*c))/(2.0f*a);
 

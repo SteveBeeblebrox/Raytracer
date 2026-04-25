@@ -53,21 +53,16 @@ class CPURaytracer final : public AbstractRayTracer {
         }
 
         [[nodiscard]] virtual const unsigned char* run(const Camera& camera) override {
-            for(const Shape* shape = this->S_SHAPEV; shape < this->S_SHAPEV + this->S_SHAPEC; shape++) {
-                std::cout << "Shape Pos: " << shape->as_sphere.pos.x() << ", " << shape->as_sphere.pos.y() << ", " << shape->as_sphere.pos.z() << std::endl;
-                std::cout << "Shape Diffuse: " << shape->material.diffuse.x() << ", " << shape->material.diffuse.y() << ", " << shape->material.diffuse.z() << std::endl;
-                std::cout << "Shape Radius: " << shape->as_sphere.radius << std::endl;
-            }
-
             // Compute the camera ray for the given (x,y) image pixel
             // See http://www.unknownroad.com/rtfm/graphics/rt_eyerays.html
             const float hfov = 2.0f*mm::atan(mm::tan(camera.vfov/2)*(float) this->WIDTH/(float) this->HEIGHT);
             const float samples = (this->ANTIALIASING_LEVEL + 1)*(this->ANTIALIASING_LEVEL + 1), stride = 1.0f/((float) this->ANTIALIASING_LEVEL + 1.0f);
             const mm::vec3
                 localZ = mm::vec3::normalize(camera.look_pos - camera.eye_pos),
-                localX = mm::vec3::normalize(mm::vec3::cross(localZ, camera.up_vector)),
+                localX = mm::vec3::normalize(mm::vec3::cross(localZ,  1.0f - mm::abs(mm::vec3::dot(localZ, mm::vec3(0.0f, 1.0f, 0.0f))) < 1e-3 ? mm::vec3(1.0f, 0.0f, 0.0f) : mm::vec3(0.0f, 1.0f, 0.0f))),
                 localY = mm::vec3::normalize(mm::vec3::cross(localX, localZ))
             ;
+
             for(unsigned int py = 0; py < this->HEIGHT; py++) {
                 for(unsigned int px = 0; px < this->WIDTH; px++) {
                     const unsigned int idx = (py*this->WIDTH + px)*AbstractRayTracer::CHANNELS;
@@ -83,12 +78,7 @@ class CPURaytracer final : public AbstractRayTracer {
 
                             // TODO: replace this if statement with shade() once the basics are working
                             if(intersection.is_valid()) {
-                                if(idx % 500 == 0) {
-                                    std::cout << "Eye pos: " << camera.eye_pos.x() << ", " << camera.eye_pos.y() << ", " << camera.eye_pos.z() << ", " << std::endl;
-                                    std::cout << "Hit pos: " << intersection.pos.x() << ", " << intersection.pos.y() << ", " << intersection.pos.z() << ", " << std::endl;
-                                    std::cout << "Hit depth: " << mm::vec3::distance(camera.eye_pos, intersection.pos) << std::endl;
-                                }
-                                color = (camera.eye_pos - intersection.pos)*(camera.eye_pos - intersection.pos);//intersection.material->diffuse;
+                                color = (camera.eye_pos - intersection.pos).length()/10.0f*intersection.material->diffuse;
                             }
                         }
                     }
