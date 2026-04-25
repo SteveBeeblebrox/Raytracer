@@ -60,22 +60,21 @@ class CPURaytracer final : public AbstractRayTracer {
             return 1.0f - mm::clamp(alpha, 0.0f, 1.0f);
         }
 
-        [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int n) {
+        [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int bounces) {
             mm::vec3 color(0.0f, 0.0f, 0.0f);
 
-            if(!intersecton.is_valid() || n > ITERATIONS) {
+            if(!intersecton.is_valid() || bounces > ITERATIONS) {
                 return color;
             }
 
-            color += intersecton.material->ambient*0.05f;
-
+            const Material& material = *intersecton.material;
             const mm::vec3
                 I = mm::vec3::normalize(ray.direction),
                 V = -I,
                 p = intersecton.pos
             ;
 
-            const Material* material = intersecton.material;
+            color += material.ambient*0.05f;
 
             for(const Light* light = this->S_LIGHTV; light < this->S_LIGHTV + this->S_LIGHTC; light++) {
                 if(float transmission = this->intersectShadowRay(p, *light); transmission > 0.0f) {
@@ -85,13 +84,47 @@ class CPURaytracer final : public AbstractRayTracer {
                         R = -L + 2.0f*N*mm::vec3::dot(N, L)
                     ;
 
-                    color += material->diffuse*transmission*light->diffuse*mm::max(mm::vec3::dot(L, N), 0.0f);
-                    color += material->specular*transmission*light->specular*mm::pow(mm::max(mm::vec3::dot(V, R), 0.0f), material->shininess);
-                    color += material->ambient*transmission*light->ambient;
+                    color += material.diffuse*transmission*light->diffuse*mm::max(mm::vec3::dot(L, N), 0.0f);
+                    color += material.specular*transmission*light->specular*mm::pow(mm::max(mm::vec3::dot(V, R), 0.0f), material.shininess);
+                    color += material.ambient*transmission*light->ambient;
                 }
             }
             
-            return color;
+            if(material.reflectivity > 0.0f || material.alpha < 1.0f) {
+                // FLip if back face/inside
+                const bool front_facing = mm::vec3::dot(I, intersecton.normal) < 0.0f;
+                const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersecton.normal);
+                const float 
+                    n1 = front_facing ? source_refraction : material.indexOfRefraction,
+                    n2 = front_facing ? material.indexOfRefraction : source_refraction
+                ;
+        
+                // Compute Fresnel reflection coefficient using Schlick's Approximation
+                // https://en.wikipedia.org/wiki/Schlick%27s_approximation
+                const float R0 = mm::pow((n1 - n2)/(n1 + n2), 2.0f);
+                const float R = R0 + (1 - R0)*mm::pow(1 - mm::clamp(-mm::vec3::dot(I, N), -1.0f, 1.0f), 5.0f);
+
+                // Combine Fresnel weights with explicit material weights
+                // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
+                const float 
+                    reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
+                    refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
+                ;
+                 
+                const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
+                const mm::vec3 reflection = reflectivity > 0.0f ? this->shade(this->intersectRay(reflection_ray), reflection_ray, n1, bounces + 1) : mm::vec3(0.0f);
+
+                // Snell's law for refraction
+                // https://en.wikipedia.org/wiki/Snell%27s_law#Vector_form
+                // See https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml
+                const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
+                const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
+                const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? this->shade(this->intersectRay(refraction_ray), refraction_ray, n2, bounces + 1) : mm::vec3(0.0f);
+
+                color = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*color; 
+            }
+
+            return color.map(mm::clamp, 0.0f, 1.0f);
         }
 
         [[nodiscard]] virtual const unsigned char* run(const Camera& camera) override {
