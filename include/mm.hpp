@@ -160,6 +160,14 @@ namespace mm {
                 return CUDA_IMPL(std::sqrt, sqrtf)(this->_data[0]*this->_data[0] + this->_data[1]*this->_data[1] + this->_data[2]*this->_data[2]);
             }
 
+            template<typename F> __host__ __device__ static constexpr inline vec3 map(const vec3& value, F f) {
+                return vec3(f(value._data[0]), f(value._data[1]), f(value._data[2]));
+            }
+
+            template<typename F> __host__ __device__ constexpr inline vec3 map(F f) const {
+                return vec3::map(*this, f);
+            }
+
             __host__ __device__ static constexpr inline vec3 normalize(const vec3& value) {
                 return value.length() > 0.0f ? value/value.length() : value;
             }
