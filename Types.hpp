@@ -21,7 +21,8 @@ struct Material final {
     mm::vec3 specular = {0.0f, 0.0f, 0.0f};
     float shininess = 0.0f;
     float reflectivity = 0.0f;
-    float indexOfRefraction = 0.0f;
+    // See https://en.wikipedia.org/wiki/List_of_refractive_indices
+    float indexOfRefraction = 1.0f;
     float alpha = 1.0f;
 };
 
