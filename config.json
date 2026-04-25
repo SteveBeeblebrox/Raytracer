@@ -1,17 +1,42 @@
 {
-    "resolution": [100, 100],
+    "resolution": [400, 400],
     "antialiasing": 1,
+    "camera": {
+        "pos": [4,1.5,2],
+        "fov": 45
+    },
     "scene": [
         {
             "type": "sphere",
-            "pos": [0,0,0],
+            "pos": [0,0.5,0],
             "radius": 0.5,
             "material": {
-                "diffuse": [0.5, 0, 0]
+                "diffuse": [1, 0, 0],
+                "specular": [1, 0, 0],
+                "shininess": 8,
+                "reflectivity": 0.35
             }
         },
         {
-            "type": "_plane",
+            "type": "sphere",
+            "pos": [1,0.3,0.5],
+            "radius": 0.2,
+            "material": {
+                "diffuse": [0, 0, 1],
+                "alpha": 0.35,
+                "refraction": 1.333
+            }
+        },
+        {
+            "type": "sphere",
+            "pos": [0.9,0.3,0.3],
+            "radius": 0.1,
+            "material": {
+                "diffuse": [0, 1, 0]
+            }
+        },
+        {
+            "type": "plane",
             "material": {
                 "diffuse": [0.5, 0.5, 0.5]
             }
