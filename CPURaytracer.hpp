@@ -7,10 +7,18 @@ class CPURaytracer final : public AbstractRayTracer {
     private:
         unsigned char* _bytes;
 
-        const Shape* S_SHAPEV;
         const unsigned int S_SHAPEC;
+        const Shape* S_SHAPEV;
+
+        const unsigned int S_LIGHTC;
+        const Light* S_LIGHTV;
     public:
-        CPURaytracer(const unsigned int width, const unsigned int height, const unsigned int antialiasing, const unsigned int s_shapec, const Shape* s_shapev) : AbstractRayTracer(width, height, antialiasing), S_SHAPEC(s_shapec), S_SHAPEV(s_shapev) {
+        CPURaytracer(
+            const unsigned int width, const unsigned int height,
+            const unsigned int antialiasing,
+            const unsigned int s_shapec, const Shape* s_shapev,
+            const unsigned int s_lightc, const Light* s_lightv
+        ) : AbstractRayTracer(width, height, antialiasing), S_SHAPEC(s_shapec), S_SHAPEV(s_shapev), S_LIGHTC(s_lightc), S_LIGHTV(s_lightv) {
             this->_bytes = new unsigned char[this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS];
         }
 

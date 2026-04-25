@@ -58,7 +58,7 @@ int main(int argc, const char** argv) {
             shapes.push_back(shape);
         }
         
-        auto raytracer = CPURaytracer(json::get<json::NumberT>(config, "resolution[0]", 1920.0f), json::get<json::NumberT>(config, "resolution[1]", 1080.0f), json::get<json::NumberT>(config, "antialiasing", 1.0f), shapes.size(), shapes.data());
+        auto raytracer = CPURaytracer(json::get<json::NumberT>(config, "resolution[0]", 1920.0f), json::get<json::NumberT>(config, "resolution[1]", 1080.0f), json::get<json::NumberT>(config, "antialiasing", 1.0f), shapes.size(), shapes.data(), lights.size(), lights.data());
 
         Camera camera = {
             .eye_pos = mm::vec3(
@@ -68,7 +68,7 @@ int main(int argc, const char** argv) {
             ),
             .vfov = (float) json::get<json::NumberT>(config, "camera.fov", 45.0f)*mm::PI/180.0f
         };
-        
+
         if(lights.size() == 0) {
             util::warn("No lights defined in '%s'!", argv[1]);
         }
