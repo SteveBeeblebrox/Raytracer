@@ -50,6 +50,8 @@ namespace mm {
     __host__ __device__ constexpr inline float log2(const float value) { return CUDA_IMPL(std::log2, log2f)(value); }
     __host__ __device__ constexpr inline float log10(const float value) { return CUDA_IMPL(std::log10, log10f)(value); }
 
+    __host__ __device__ constexpr inline float pow(const float base, const float exponent) { return CUDA_IMPL(std::pow, powf)(base, exponent); }
+
     __host__ __device__ constexpr inline float min(const float a, const float b) { return CUDA_IMPL(std::min, fminf)(a, b); }
     __host__ __device__ constexpr inline float max(const float a, const float b) { return CUDA_IMPL(std::max, fmaxf)(a, b); }
 

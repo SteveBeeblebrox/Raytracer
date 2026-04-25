@@ -26,7 +26,7 @@ class CPURaytracer final : public AbstractRayTracer {
             delete[] this->_bytes;
         }
 
-        Intersection intersectRay(const Ray& ray) const {
+        [[nodiscard]] Intersection intersectRay(const Ray& ray) const {
             Intersection closestIntersection = Intersection::invalid();
             for(const Shape* shape = this->S_SHAPEV; shape < this->S_SHAPEV + this->S_SHAPEC; shape++) {
                 Intersection intersection = shape->intersect(ray);
@@ -37,7 +37,7 @@ class CPURaytracer final : public AbstractRayTracer {
             return closestIntersection;
         }
 
-        float intersectShadowRay(const mm::vec3& pos, const Light& light) const {
+        [[nodiscard]] float intersectShadowRay(const mm::vec3& pos, const Light& light) const {
             // With only solid objects, this could return a boolean if obstructed, but for transparent objects, we need to track how much light was obstructed
             // Returns percent transmission in [0,1]
             float alpha = 0.0f;
@@ -58,6 +58,40 @@ class CPURaytracer final : public AbstractRayTracer {
             }
 
             return 1.0f - mm::clamp(alpha, 0.0f, 1.0f);
+        }
+
+        [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int n) {
+            mm::vec3 color(0.0f, 0.0f, 0.0f);
+
+            if(!intersecton.is_valid() || n > ITERATIONS) {
+                return color;
+            }
+
+            color += intersecton.material->ambient*0.05f;
+
+            const mm::vec3
+                I = mm::vec3::normalize(ray.direction),
+                V = -I,
+                p = intersecton.pos
+            ;
+
+            const Material* material = intersecton.material;
+
+            for(const Light* light = this->S_LIGHTV; light < this->S_LIGHTV + this->S_LIGHTC; light++) {
+                if(float transmission = this->intersectShadowRay(p, *light); transmission > 0.0f) {
+                    const mm::vec3
+                        N = mm::vec3::normalize(intersecton.normal),
+                        L = mm::vec3::normalize(light->pos - p),
+                        R = -L + 2.0f*N*mm::vec3::dot(N, L)
+                    ;
+
+                    color += material->diffuse*transmission*light->diffuse*mm::max(mm::vec3::dot(L, N), 0.0f);
+                    color += material->specular*transmission*light->specular*mm::pow(mm::max(mm::vec3::dot(V, R), 0.0f), material->shininess);
+                    color += material->ambient*transmission*light->ambient;
+                }
+            }
+            
+            return color;
         }
 
         [[nodiscard]] virtual const unsigned char* run(const Camera& camera) override {
@@ -82,12 +116,10 @@ class CPURaytracer final : public AbstractRayTracer {
                             const float x = (2.0f*(px + dx) - (float) this->WIDTH)/(float) this->WIDTH*mm::tan(hfov/2);
                             const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float)this->HEIGHT*mm::tan(camera.vfov/2);
                             
-                            const Intersection intersection = this->intersectRay(Ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY)));
+                            const Ray ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY));
+                            const Intersection intersection = this->intersectRay(ray);
 
-                            // TODO: replace this if statement with shade() once the basics are working
-                            if(intersection.is_valid()) {
-                                color = (camera.eye_pos - intersection.pos).length()/10.0f*intersection.material->diffuse;
-                            }
+                            color += (1.0f/samples)*this->shade(intersection, ray, 1.0f, 0);
                         }
                     }
 
