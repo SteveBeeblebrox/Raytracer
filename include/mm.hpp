@@ -140,16 +140,18 @@ namespace mm {
             }
 
             __host__ __device__ constexpr inline vec3 operator+(const vec3& value) const { return vec3(this->_data[0] + value._data[0], this->_data[1] + value._data[1], this->_data[2] + value._data[2]); }
-            __host__ __device__ constexpr inline vec3 operator+(const float value) const { return vec3(this->_data[0] + value, this->_data[1] + value, this->_data[2] + value); }
+            __host__ __device__ constexpr inline friend vec3 operator+(const vec3& vec, const float value) { return vec3(vec._data[0] + value,          vec._data[1] + value,          vec._data[2] + value); }
+            __host__ __device__ constexpr inline friend vec3 operator+(const float value, const vec3& vec) { return vec3(vec._data[0] + value,          vec._data[1] + value,          vec._data[2] + value); }
 
             __host__ __device__ constexpr inline vec3 operator-(const vec3& value) const { return vec3(this->_data[0] - value._data[0], this->_data[1] - value._data[1], this->_data[2] - value._data[2]); }
-            __host__ __device__ constexpr inline vec3 operator-(const float value) const { return vec3(this->_data[0] - value, this->_data[1] - value, this->_data[2] - value); }
+            __host__ __device__ constexpr inline friend vec3 operator-(const vec3& vec, const float value) { return vec3(vec._data[0] - value,          vec._data[1] - value,          vec._data[2] - value); }
 
             __host__ __device__ constexpr inline vec3 operator*(const vec3& value) const { return vec3(this->_data[0] * value._data[0], this->_data[1] * value._data[1], this->_data[2] * value._data[2]); }
-            __host__ __device__ constexpr inline vec3 operator*(const float value) const { return vec3(this->_data[0] * value, this->_data[1] * value, this->_data[2] * value); }
+            __host__ __device__ constexpr inline friend vec3 operator*(const vec3& vec, const float value) { return vec3(vec._data[0] * value,          vec._data[1] * value,          vec._data[2] * value); }
+            __host__ __device__ constexpr inline friend vec3 operator*(const float value, const vec3& vec) { return vec3(vec._data[0] * value,          vec._data[1] * value,          vec._data[2] * value); }
 
             __host__ __device__ constexpr inline vec3 operator/(const vec3& value) const { return vec3(this->_data[0] / value._data[0], this->_data[1] / value._data[1], this->_data[2] / value._data[2]); }
-            __host__ __device__ constexpr inline vec3 operator/(const float value) const { return vec3(this->_data[0] / value, this->_data[1] / value, this->_data[2] / value); }
+            __host__ __device__ constexpr inline friend vec3 operator/(const vec3& vec, const float value) { return vec3(vec._data[0] / value,          vec._data[1] / value,          vec._data[2] / value); }
 
             __host__ __device__ constexpr inline bool operator==(const vec3& value) const { return this->_data[0] == value._data[0] && this->_data[1] == value._data[1] && this->_data[2] == value._data[2]; }
             __host__ __device__ constexpr inline bool operator!=(const vec3& value) const { return this->_data[0] != value._data[0] || this->_data[1] != value._data[1] || this->_data[2] != value._data[2]; }
