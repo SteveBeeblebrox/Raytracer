@@ -77,8 +77,6 @@ namespace mm {
             __host__ __device__ constexpr inline float v() const { return this->_data[1]; }
             __host__ __device__ constexpr inline float w() const { return this->_data[2]; }
 
-            __host__ __device__ constexpr inline operator bool() const { return this->_data[0] != 0.0f || this->_data[1] != 0.0f || this->_data[2] != 0.0f; }
-
             __host__ __device__ constexpr inline vec3 operator+() const { return vec3(this->_data[0], this->_data[1], this->_data[2]); }
             __host__ __device__ constexpr inline vec3 operator-() const { return vec3(-this->_data[0], -this->_data[1], -this->_data[2]); }
 
