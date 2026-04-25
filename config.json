@@ -1,0 +1,23 @@
+{
+    "resolution": [100, 100],
+    "antialiasing": 1,
+    "scene": [
+        {
+            "type": "sphere",
+            "pos": [0,0,0],
+            "radius": 0.5,
+            "material": {
+                "diffuse": [0.5, 0, 0]
+            }
+        },
+        {
+            "type": "_plane",
+            "material": {
+                "diffuse": [0.5, 0.5, 0.5]
+            }
+        },
+        {
+            "type": "light"
+        }
+    ]
+}

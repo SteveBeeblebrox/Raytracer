@@ -1,0 +1,51 @@
+# (c) Trin Wasinger (2026)
+TARGET ?= main
+CFLAGS ?= -Wall -std=c++17
+LFLAGS ?= -Wall
+
+LIBS ?= 
+INCLUDE ?= include
+
+CXX ?= g++
+BUILD_DIR ?= .build
+
+ifeq ($(firstword $(MAKECMDGOALS) uwu), $(filter $(firstword $(MAKECMDGOALS)), run gdb))
+  RUN_ARGS := $(wordlist 2, $(words $(MAKECMDGOALS)), $(MAKECMDGOALS))
+  $(eval $(RUN_ARGS):.FORCE;@:)
+endif
+
+ifeq ($(firstword $(MAKECMDGOALS) uwu), $(filter $(firstword $(MAKECMDGOALS)), debug gdb))
+  $(eval $(TARGET): .FORCE)
+endif
+
+.PHONY: default all clean run debug .FORCE
+.FORCE:
+
+default: $(TARGET)
+all: default
+
+clean:
+	rm -rf $(BUILD_DIR)
+	rm $(TARGET)
+
+run: $(TARGET)
+	./$(TARGET) $(RUN_ARGS)
+
+gdb: debug
+	gdb -q -ex 'set confirm off' --args $(TARGET) $(RUN_ARGS)
+
+debug: CFLAGS += -DDEBUG -g
+debug: $(TARGET)
+
+$(BUILD_DIR)/%.o: %.cpp
+	mkdir -p $(@D)
+	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) -MD -MP -o $@ -c $<
+
+$(BUILD_DIR)/%.cu.o: %.cu
+	mkdir -p $(@D)
+	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) -MD -MP -o $@ -c $<
+
+$(TARGET): $(addprefix $(BUILD_DIR)/, $(patsubst %.cpp, %.o, $(wildcard *.cpp)) $(patsubst %.cu, %.cu.o, $(wildcard *.cu)))
+	$(CXX) $< $(LFLAGS) $(addprefix -l, $(LIBS)) -o $@
+
+-include $(addprefix $(BUILD_DIR)/, $(patsubst %.cpp, %.d, $(wildcard *.cpp)) $(patsubst %.cu, %.cu.d, $(wildcard *.cu)))
