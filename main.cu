@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <chrono>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "include/stb_image_write.h"
@@ -106,7 +107,13 @@ tp <x> <y> <z> - Move the arcball camera to x, y, z
                 }
             } else if(line == "r" || line == "run") {
                 std::cout << "Rendering..." << std::endl;
+
+                auto start = std::chrono::high_resolution_clock::now();
                 const unsigned char* const bytes = raytracer.run(camera);
+                auto end = std::chrono::high_resolution_clock::now();
+
+                double ms = std::chrono::duration<double, std::milli>(end - start).count();
+                std::cout << "TIMING_MS:" << ms << std::endl;  // parseable tag
 
                 if(!stbi_write_png("render.png", raytracer.WIDTH, raytracer.HEIGHT, AbstractRayTracer::CHANNELS, bytes, AbstractRayTracer::CHANNELS*raytracer.WIDTH)) {
                     util::error("Unable to write to '%s'", "render.png");

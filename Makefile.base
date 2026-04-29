@@ -39,12 +39,12 @@ debug: $(TARGET)
 
 $(BUILD_DIR)/%.o: %.cpp
 	mkdir -p $(@D)
-	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) -MD -MP -o $@ -c $<
+	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) $(DEPFLAGS) -o $@ -c $<  # was -MD -MP
 
 $(BUILD_DIR)/%.cu.o: %.cu
 	mkdir -p $(@D)
-	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) -MD -MP -o $@ -c $<
-
+	$(CXX) $(CFLAGS) $(addprefix -I, $(INCLUDE)) $(DEPFLAGS) -o $@ -c $<  # was -MD -MP
+	
 $(TARGET): $(addprefix $(BUILD_DIR)/, $(patsubst %.cpp, %.o, $(wildcard *.cpp)) $(patsubst %.cu, %.cu.o, $(wildcard *.cu)))
 	$(CXX) $< $(LFLAGS) $(addprefix -l, $(LIBS)) -o $@
 

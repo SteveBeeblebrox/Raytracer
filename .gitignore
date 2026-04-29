@@ -3,3 +3,5 @@
 *.ppm
 *.log
 raytracer
+venv
+_bench_configs
