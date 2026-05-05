@@ -11,23 +11,33 @@ def make_sphere(i):
     random.seed(i)
     return {
         "type": "sphere",
-        "pos[0]": round(random.random(), 2),
-        "pos[1]": round(random.random(), 2),
-        "pos[2]": round(random.random(), 2),
+        "pos": [round(random.random(), 2), round(random.random(), 2), round(random.random(), 2)],
+        # "pos[0]": round(random.random(), 2),
+        # "pos[1]": round(random.random(), 2),
+        # "pos[2]": round(random.random(), 2),
         "radius": round(random.random(), 2),
-        "material.diffuse[0]": round(random.random(), 2),
-        "material.diffuse[1]": round(random.random(), 2),
-        "material.diffuse[2]": round(random.random(), 2),
-        "material.ambient[0]": round(random.random(), 2),
-        "material.ambient[1]": round(random.random(), 2),
-        "material.ambient[2]": round(random.random(), 2),
-        "material.specular[0]": round(random.random(), 2),
-        "material.specular[1]": round(random.random(), 2),
-        "material.specular[2]": round(random.random(), 2),
-        "material.shininess": round(random.uniform(0, 10), 2),
-        "material.reflectivity": round(random.random(), 2),
-        "material.refraction": round(random.uniform(0,2), 2),
-        "material.alpha": round(random.random(), 2)
+        "material":{
+            "diffuse": [round(random.random(), 2), round(random.random(), 2), round(random.random(), 2)],
+            "ambient": [round(random.random(), 2), round(random.random(), 2), round(random.random(), 2)],
+            "specular": [round(random.random(), 2), round(random.random(), 2), round(random.random(), 2)],
+            "shininess": round(random.uniform(0, 10), 2),
+            "reflectivity": round(random.random(), 2),
+            "refraction": round(random.uniform(0,2), 2),
+            "alpha": round(random.random(), 2)
+        }
+        # "material.diffuse[0]": round(random.random(), 2),
+        # "material.diffuse[1]": round(random.random(), 2),
+        # "material.diffuse[2]": round(random.random(), 2),
+        # "material.ambient[0]": round(random.random(), 2),
+        # "material.ambient[1]": round(random.random(), 2),
+        # "material.ambient[2]": round(random.random(), 2),
+        # "material.specular[0]": round(random.random(), 2),
+        # "material.specular[1]": round(random.random(), 2),
+        # "material.specular[2]": round(random.random(), 2),
+        # "material.shininess": round(random.uniform(0, 10), 2),
+        # "material.reflectivity": round(random.random(), 2),
+        # "material.refraction": round(random.uniform(0,2), 2),
+        # "material.alpha": round(random.random(), 2)
     }
 
 def make_config(num_spheres, width, height):
@@ -42,10 +52,11 @@ def make_config(num_spheres, width, height):
     ]
     scene += [make_sphere(i) for i in range(num_spheres)]
     return {
-        "resolution[0]": width,
-        "resolution[1]": height,
+        "resolution": [width, height],
+        #"resolution[1]": height,
         "antialiasing": 1,
-        "camera": {"pos[0]": 4, "pos[1]": 1.5, "pos[2]": 2, "fov": 45},
+        "camera":{"pos":[4, 1.5, 2], "fov":45},
+        #"camera": {"pos[0]": 4, "pos[1]": 1.5, "pos[2]": 2, "fov": 45},
         "scene": scene
     }
 
