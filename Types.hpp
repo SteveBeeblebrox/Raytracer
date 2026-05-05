@@ -13,6 +13,11 @@ struct Camera final {
     mm::vec3 look_pos = {0.0f, 0.0f, 0.0f};
     mm::vec3 up_vector = {0.0f, 1.0f, 0.0f};
     float vfov = mm::PI/4.0f;
+
+    // Horizontal FOV determined by vfov and size
+    __host__ __device__ [[nodiscard]] constexpr inline float hfov(const unsigned int width, const unsigned int height) const {
+        return 2.0f*mm::atan(mm::tan(this->vfov/2)*(float) width/(float) height);
+    }
 };
 
 struct Material final {

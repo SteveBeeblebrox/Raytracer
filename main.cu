@@ -92,7 +92,7 @@ tp <x> <y> <z> - Move the arcball camera to x, y, z
                 std::cout << "Static Shapes:      " << shapes.size() << std::endl;
                 std::cout << "Lights:             " << lights.size() << std::endl;
                 std::cout << "Resolution:         " << raytracer.WIDTH << "x" << raytracer.HEIGHT << std::endl;
-                std::cout << "Antialiasing Level: " << raytracer.ANTIALIASING_LEVEL << " (" << (raytracer.ANTIALIASING_LEVEL + 1)*(raytracer.ANTIALIASING_LEVEL + 1) << " samples)" << std::endl;
+                std::cout << "Antialiasing Level: " << raytracer.ANTIALIASING.LEVEL << " (" << (raytracer.ANTIALIASING.SAMPLES) << " samples)" << std::endl;
                 std::cout << "Camera Pos:         " << camera.eye_pos.x() << ", " << camera.eye_pos.y() << ", " << camera.eye_pos.z() << std::endl;
             
             } else if(util::string::starts_with(line, "tp ")) {

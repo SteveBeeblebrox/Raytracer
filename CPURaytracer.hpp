@@ -1,12 +1,9 @@
 #pragma once
 
 #include "AbstractRaytracer.hpp"
-#include "Types.hpp"
 
 class CPURaytracer final : public AbstractRayTracer {
     private:
-        unsigned char* _bytes;
-
         const unsigned int S_SHAPEC;
         const Shape* S_SHAPEV;
 
@@ -18,13 +15,9 @@ class CPURaytracer final : public AbstractRayTracer {
             const unsigned int antialiasing,
             const unsigned int s_shapec, const Shape* s_shapev,
             const unsigned int s_lightc, const Light* s_lightv
-        ) : AbstractRayTracer(width, height, antialiasing), S_SHAPEC(s_shapec), S_SHAPEV(s_shapev), S_LIGHTC(s_lightc), S_LIGHTV(s_lightv) {
-            this->_bytes = new unsigned char[this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS];
-        }
+        ) : AbstractRayTracer(width, height, antialiasing), S_SHAPEC(s_shapec), S_SHAPEV(s_shapev), S_LIGHTC(s_lightc), S_LIGHTV(s_lightv) {}
 
-        virtual ~CPURaytracer() override {
-            delete[] this->_bytes;
-        }
+        virtual ~CPURaytracer() override {}
 
         [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int bounces) {
             mm::vec3 color(0.0f, 0.0f, 0.0f);
@@ -96,8 +89,6 @@ class CPURaytracer final : public AbstractRayTracer {
         [[nodiscard]] virtual const unsigned char* run(const Camera& camera) override {
             // Compute the camera ray for the given (x,y) image pixel
             // See http://www.unknownroad.com/rtfm/graphics/rt_eyerays.html
-            const float hfov = 2.0f*mm::atan(mm::tan(camera.vfov/2)*(float) this->WIDTH/(float) this->HEIGHT);
-            const float samples = (this->ANTIALIASING_LEVEL + 1)*(this->ANTIALIASING_LEVEL + 1), stride = 1.0f/((float) this->ANTIALIASING_LEVEL + 1.0f);
             const mm::vec3
                 localZ = mm::vec3::normalize(camera.look_pos - camera.eye_pos),
                 localX = mm::vec3::normalize(mm::vec3::cross(localZ,  1.0f - mm::abs(mm::vec3::dot(localZ, mm::vec3(0.0f, 1.0f, 0.0f))) < 1e-3 ? mm::vec3(1.0f, 0.0f, 0.0f) : mm::vec3(0.0f, 1.0f, 0.0f))),
@@ -110,15 +101,15 @@ class CPURaytracer final : public AbstractRayTracer {
 
                     mm::vec3 color(0.0f, 0.0f, 0.0f);
 
-                    for(float dx = stride/2.0f; dx < 1.0f; dx += stride) {
-                        for(float dy = stride/2.0f; dy < 1.0f; dy += stride) {
-                            const float x = (2.0f*(px + dx) - (float) this->WIDTH)/(float) this->WIDTH*mm::tan(hfov/2);
+                    for(float dx = this->ANTIALIASING.STRIDE/2.0f; dx < 1.0f; dx += this->ANTIALIASING.STRIDE) {
+                        for(float dy = this->ANTIALIASING.STRIDE/2.0f; dy < 1.0f; dy += this->ANTIALIASING.STRIDE) {
+                            const float x = (2.0f*(px + dx) - (float) this->WIDTH)/(float) this->WIDTH*mm::tan(camera.hfov(this->WIDTH, this->HEIGHT)/2);
                             const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float)this->HEIGHT*mm::tan(camera.vfov/2);
                             
                             const Ray ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY));
                             const Intersection intersection = Intersection::of(ray, this->S_SHAPEC, this->S_SHAPEV);
 
-                            color += (1.0f/samples)*this->shade(intersection, ray, 1.0f, 0);
+                            color += (1.0f/this->ANTIALIASING.SAMPLES)*this->shade(intersection, ray, 1.0f, 0);
                         }
                     }
 
