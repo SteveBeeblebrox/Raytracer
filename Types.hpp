@@ -5,7 +5,7 @@
 struct Ray final {
     mm::vec3 direction;
     mm::vec3 origin;
-    Ray(const mm::vec3 _origin, const mm::vec3 _direction, float _step = 0.001f) : direction(_direction.normalize()), origin(_origin + direction*_step) {} // Offset slightly to avoid rounding issues
+    __host__ __device__ inline Ray(const mm::vec3 _origin, const mm::vec3 _direction, float _step = 0.001f) : direction(_direction.normalize()), origin(_origin + direction*_step) {} // Offset slightly to avoid rounding issues
 };
 
 struct Camera final {
@@ -13,13 +13,6 @@ struct Camera final {
     mm::vec3 look_pos = {0.0f, 0.0f, 0.0f};
     mm::vec3 up_vector = {0.0f, 1.0f, 0.0f};
     float vfov = mm::PI/4.0f;
-};
-
-struct Light final {
-    mm::vec3 pos = {5.0f, 5.0f, 5.0f};
-    mm::vec3 diffuse = {1.0f, 1.0f, 1.0f};
-    mm::vec3 ambient = {1.0f, 1.0f, 1.0f};
-    mm::vec3 specular = {1.0f, 1.0f, 1.0f};
 };
 
 struct Material final {
@@ -79,6 +72,50 @@ struct Intersection final {
             intersection = Intersection::closest(ray.origin, shape->intersect(ray), intersection);
         }
         return intersection;
+    }
+};
+
+struct Light final {
+    mm::vec3 pos = {5.0f, 5.0f, 5.0f};
+    mm::vec3 diffuse = {1.0f, 1.0f, 1.0f};
+    mm::vec3 ambient = {1.0f, 1.0f, 1.0f};
+    mm::vec3 specular = {1.0f, 1.0f, 1.0f};
+
+    // Note: This function has room for some visual improvements
+    // - Occlusion isn't actually just summing the alpha between multiple objects, maybe use multiply & add?
+    // - Track and return color value instead of just percentage (e.g. stained for glass shadows)
+    // Both of these may run into the alpha ordering problem though
+    __host__ __device__ [[nodiscard]] static inline float transmission(const mm::vec3& pos, const Light& light, const unsigned int shapec, const Shape* shapev) {
+        // With only solid objects, this could return a boolean if obstructed, but for transparent objects, we need to track how much light was obstructed
+        // Returns percent transmission in [0,1]
+        float alpha = 0.0f;
+
+        const mm::vec3 L = mm::vec3::normalize(light.pos - pos);
+        
+        const Ray ray = Ray(pos, L);
+        for(const Shape* shape = shapev; shape < shapev + shapec; shape++) {
+            Intersection intersection = shape->intersect(ray);
+            if(intersection.is_valid() && mm::vec3::distance(intersection.pos, ray.origin) < mm::vec3::distance(light.pos, ray.origin)) {
+                alpha += intersection.material->alpha;
+            }
+
+            // Bail early if possible
+            if(alpha >= 1.0f) {
+                break;
+            }
+        }
+
+        return 1.0f - mm::clamp(alpha, 0.0f, 1.0f);
+    }
+
+    __host__ __device__ [[nodiscard]] static inline float netTransmission(const float t1, const float t2) {
+        // See notes on transmission() about realism of just using addition
+        // If t1 has 80% transmission and t2 has 55% transmission, then we want 1.0f - clamp((1.0f - 0.8f) + (1.0f - 0.55f), 0.0f, 1.0f) = 0.35
+        // return 1.0f - mm::clamp((1.0f - t1) + (1.0f - t2), 0.0f, 1.0f);
+        //                                        1                2 - a - b <= 0
+        // 1 - clamp((1 - a) + (1 - b), 0, 1) = { 0           if   2 - a - b >= 1      = max(a + b - 1, 0) since a + b <= 2
+        //                                        a + b - 1        0 < 2 - a - b <  1
+        return mm::max(t1 + t2 - 1.0f, 0.0f);
     }
 };
 

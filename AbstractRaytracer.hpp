@@ -2,6 +2,8 @@
 
 #include "include/NonCopyable.hpp"
 
+#include "Types.hpp"
+
 class AbstractRayTracer : NonCopyable {
     public:
         const unsigned int WIDTH, HEIGHT;

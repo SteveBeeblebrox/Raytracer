@@ -26,40 +26,6 @@ class CPURaytracer final : public AbstractRayTracer {
             delete[] this->_bytes;
         }
 
-        [[nodiscard]] Intersection intersectRay(const Ray& ray) const {
-            Intersection closestIntersection = Intersection::invalid();
-            for(const Shape* shape = this->S_SHAPEV; shape < this->S_SHAPEV + this->S_SHAPEC; shape++) {
-                Intersection intersection = shape->intersect(ray);
-                if(intersection.is_valid() && (!closestIntersection.is_valid() || mm::vec3::distance(intersection.pos, ray.origin) < mm::vec3::distance(closestIntersection.pos, ray.origin))) {
-                    closestIntersection = intersection;
-                }
-            }
-            return closestIntersection;
-        }
-
-        [[nodiscard]] float intersectShadowRay(const mm::vec3& pos, const Light& light) const {
-            // With only solid objects, this could return a boolean if obstructed, but for transparent objects, we need to track how much light was obstructed
-            // Returns percent transmission in [0,1]
-            float alpha = 0.0f;
-
-            const mm::vec3 L = mm::vec3::normalize(light.pos - pos);
-            
-            const Ray ray = Ray(pos, L);
-            for(const Shape* shape = this->S_SHAPEV; shape < this->S_SHAPEV + this->S_SHAPEC; shape++) {
-                Intersection intersection = shape->intersect(ray);
-                if(intersection.is_valid() && mm::vec3::distance(intersection.pos, ray.origin) < mm::vec3::distance(light.pos, ray.origin)) {
-                    alpha += intersection.material->alpha;
-                }
-
-                // Bail early if possible
-                if(alpha >= 1.0f) {
-                    break;
-                }
-            }
-
-            return 1.0f - mm::clamp(alpha, 0.0f, 1.0f);
-        }
-
         [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int bounces) {
             mm::vec3 color(0.0f, 0.0f, 0.0f);
 
@@ -77,7 +43,7 @@ class CPURaytracer final : public AbstractRayTracer {
             color += material.ambient*0.05f;
 
             for(const Light* light = this->S_LIGHTV; light < this->S_LIGHTV + this->S_LIGHTC; light++) {
-                if(float transmission = this->intersectShadowRay(p, *light); transmission > 0.0f) {
+                if(float transmission = Light::transmission(p, *light, this->S_SHAPEC, this->S_SHAPEV); transmission > 0.0f) {
                     const mm::vec3
                         N = mm::vec3::normalize(intersecton.normal),
                         L = mm::vec3::normalize(light->pos - p),
@@ -91,7 +57,7 @@ class CPURaytracer final : public AbstractRayTracer {
             }
             
             if(material.reflectivity > 0.0f || material.alpha < 1.0f) {
-                // FLip if back face/inside
+                // Flip if back face/inside
                 const bool front_facing = mm::vec3::dot(I, intersecton.normal) < 0.0f;
                 const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersecton.normal);
                 const float 
@@ -112,14 +78,14 @@ class CPURaytracer final : public AbstractRayTracer {
                 ;
                  
                 const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
-                const mm::vec3 reflection = reflectivity > 0.0f ? this->shade(this->intersectRay(reflection_ray), reflection_ray, n1, bounces + 1) : mm::vec3(0.0f);
+                const mm::vec3 reflection = reflectivity > 0.0f ? this->shade(Intersection::of(reflection_ray, this->S_SHAPEC, this->S_SHAPEV), reflection_ray, n1, bounces + 1) : mm::vec3(0.0f);
 
                 // Snell's law for refraction
                 // https://en.wikipedia.org/wiki/Snell%27s_law#Vector_form
                 // See https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml
                 const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
                 const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
-                const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? this->shade(this->intersectRay(refraction_ray), refraction_ray, n2, bounces + 1) : mm::vec3(0.0f);
+                const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? this->shade(Intersection::of(refraction_ray, this->S_SHAPEC, this->S_SHAPEV), refraction_ray, n2, bounces + 1) : mm::vec3(0.0f);
 
                 color = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*color; 
             }
@@ -150,7 +116,7 @@ class CPURaytracer final : public AbstractRayTracer {
                             const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float)this->HEIGHT*mm::tan(camera.vfov/2);
                             
                             const Ray ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY));
-                            const Intersection intersection = this->intersectRay(ray);
+                            const Intersection intersection = Intersection::of(ray, this->S_SHAPEC, this->S_SHAPEV);
 
                             color += (1.0f/samples)*this->shade(intersection, ray, 1.0f, 0);
                         }
