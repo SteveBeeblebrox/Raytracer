@@ -1,6 +1,7 @@
 # (c) Trin Wasinger (2026)
 TARGET ?= main
-CFLAGS ?= -Wall -std=c++17
+CFLAGS ?= -Wall -std=c++17 -O3
+DEBUG_FLAGS ?= -DDEBUG -g -O0 -fsanitize=address
 LFLAGS ?= -Wall
 
 LIBS ?= 
@@ -34,7 +35,7 @@ run: $(TARGET)
 gdb: debug
 	gdb -q -ex 'set confirm off' --args $(TARGET) $(RUN_ARGS)
 
-debug: CFLAGS += -DDEBUG -g
+debug: CFLAGS += $(DEBUG_FLAGS)
 debug: $(TARGET)
 
 $(BUILD_DIR)/%.o: %.cpp

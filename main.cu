@@ -6,6 +6,7 @@
 #include <vector>
 #include <stdexcept>
 #include <memory>
+#include <chrono>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "include/stb_image_write.h"
@@ -187,6 +188,11 @@ runtime.json:
             } else if(line == "q" || line == "quit" || line == "exit") {
                 break;
             } else if(line == "s" || line == "stat") {
+#ifdef DEBUG
+                std::cerr << "Build:              DEBUG" << std::endl;
+#else
+                std::cerr << "Build:              RELEASE" << std::endl;
+#endif
                 std::cerr << "Target:             " << target << std::endl;
                 if(target == "gpu") {
                     std::cerr << "Block Size:         " << block_width << "x" << block_height << std::endl;
@@ -210,7 +216,12 @@ runtime.json:
                 }
             } else if(line == "r" || line == "run") {
                 std::cerr << "Rendering..." << std::endl;
+
+                auto start = std::chrono::high_resolution_clock::now();
                 raytracer->run(camera);
+                auto end = std::chrono::high_resolution_clock::now();
+
+                std::cout << "ms_time: " << std::chrono::duration<double, std::milli>(end - start).count() << std::endl;
 
                 if(!stbi_write_png("render.png", raytracer->WIDTH, raytracer->HEIGHT, AbstractRayTracer::CHANNELS, raytracer->bytes(), AbstractRayTracer::CHANNELS*raytracer->WIDTH)) {
                     util::error("Unable to write to '%s'", "render.png");
