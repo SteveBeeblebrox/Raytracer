@@ -286,6 +286,13 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                 this->_d_layers
             );
 
+            cudaError_t error;
+            if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
+                util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
+            }
+
+/*
+
             // Propagate reflections and refractions from layer `bounce` into layer `bounce + 1`
             for(unsigned int bounce = 0; bounce < AbstractRayTracer::ITERATIONS; bounce++) {
                 // Start offset of layer, size of this layer
@@ -300,6 +307,10 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                     this->LIGHTC, this->_d_LIGHTV,
                     this->_d_layers
                 );
+
+                if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
+                    util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
+                }
             }
 
             // Merge `baseColor` from relections and refractions in layer `bounce + 1` into layer `bounce`
@@ -316,10 +327,15 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                     this->_d_layers
                 );
 
+                if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
+                    util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
+                }
+
                 if(bounce == 0) {
                     break;
                 }
             }
+*/
 
             // Average AA rays
             cuda_raytracer_v2_finalize<<<
@@ -330,6 +346,10 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                 this->ANTIALIASING.SAMPLES,
                 this->_d_layers, this->_d_bytes
             );
+
+            if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
+                util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
+            }
 
             // Copy data out
             cudaMemcpy(this->_bytes, this->_d_bytes, this->size(), cudaMemcpyDeviceToHost);
