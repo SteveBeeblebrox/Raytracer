@@ -2,13 +2,17 @@
 
 #include <cuda_runtime_api.h>
 #include <cstdint>
+#include <cstdlib>
 
 #include "AbstractRaytracer.hpp"
+#include "util.hpp"
 
 // TODO:
 // enum class OptFlags : uint8_t {
 //     NONE = 0
 // };
+
+__global__ void dummy_kernel() {}
 
 template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
@@ -150,13 +154,21 @@ class GPURaytracer final : public AbstractRayTracer {
             SHAPEC(shapec), LIGHTC(lightc)
         {
             cudaStreamCreate(&this->_stream);
-            cudaMalloc(&this->_d_bytes, this->len_bytes());
+            cudaMalloc(&this->_d_bytes, this->size());
 
             cudaMalloc(&this->_d_SHAPEV, sizeof(Shape)*this->SHAPEC);
             cudaMalloc(&this->_d_LIGHTV, sizeof(Light)*this->LIGHTC);
 
             cudaMemcpy(this->_d_SHAPEV, shapev, sizeof(Shape)*this->SHAPEC, cudaMemcpyHostToDevice);
             cudaMemcpy(this->_d_LIGHTV, lightv, sizeof(Light)*this->LIGHTC, cudaMemcpyHostToDevice);
+        
+            // Verify CUDA compiled correctly
+            dummy_kernel<<<1,1>>>();
+            cudaError_t error;
+            if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
+                util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
+                exit(13);
+            }
         }
 
         virtual ~GPURaytracer() override {
@@ -183,6 +195,6 @@ class GPURaytracer final : public AbstractRayTracer {
             );
 
             // Copy data out
-            cudaMemcpy(this->_bytes, this->_d_bytes, this->len_bytes(), cudaMemcpyDeviceToHost);
+            cudaMemcpy(this->_bytes, this->_d_bytes, this->size(), cudaMemcpyDeviceToHost);
         }
 };
