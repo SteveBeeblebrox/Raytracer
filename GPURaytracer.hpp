@@ -7,11 +7,6 @@
 #include "AbstractRaytracer.hpp"
 #include "util.hpp"
 
-// TODO:
-// enum class OptFlags : uint8_t {
-//     NONE = 0
-// };
-
 __global__ void dummy_kernel() {}
 
 template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
