@@ -30,7 +30,7 @@ s/stat         - Show scene debug info
 r/run          - Render frame to 'render.png'
 tp <x> <y> <z> - Move the arcball camera to x, y, z
 
-config.json:
+config.json (For configuring scene and results):
 ```
 {
     "schema": "scene", 
@@ -75,7 +75,7 @@ config.json:
 }
 ```
 
-runtime.json:
+runtime.json (For configuring performance and parallelism):
 ```
 {
     "schema": "runtime",
