@@ -1,4 +1,5 @@
 {
+    "schema": "scene", 
     "resolution": [400, 400],
     "antialiasing": 1,
     "camera": {

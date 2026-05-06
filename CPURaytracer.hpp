@@ -19,18 +19,18 @@ class CPURaytracer final : public AbstractRayTracer {
 
         virtual ~CPURaytracer() override {}
 
-        [[nodiscard]] mm::vec3 shade(const Intersection& intersecton, const Ray& ray, const float source_refraction, const unsigned int bounces) {
+        [[nodiscard]] mm::vec3 shade(const Intersection& intersection, const Ray& ray, const float source_refraction, const unsigned int bounces) {
             mm::vec3 color(0.0f, 0.0f, 0.0f);
 
-            if(!intersecton.is_valid() || bounces > ITERATIONS) {
+            if(!intersection.is_valid() || bounces > ITERATIONS) {
                 return color;
             }
 
-            const Material& material = *intersecton.material;
+            const Material& material = *intersection.material;
             const mm::vec3
                 I = mm::vec3::normalize(ray.direction),
                 V = -I,
-                p = intersecton.pos
+                p = intersection.pos
             ;
 
             color += material.ambient*0.05f;
@@ -38,7 +38,7 @@ class CPURaytracer final : public AbstractRayTracer {
             for(const Light* light = this->S_LIGHTV; light < this->S_LIGHTV + this->S_LIGHTC; light++) {
                 if(float transmission = Light::transmission(p, *light, this->S_SHAPEC, this->S_SHAPEV); transmission > 0.0f) {
                     const mm::vec3
-                        N = mm::vec3::normalize(intersecton.normal),
+                        N = mm::vec3::normalize(intersection.normal),
                         L = mm::vec3::normalize(light->pos - p),
                         R = -L + 2.0f*N*mm::vec3::dot(N, L)
                     ;
@@ -51,8 +51,8 @@ class CPURaytracer final : public AbstractRayTracer {
             
             if(material.reflectivity > 0.0f || material.alpha < 1.0f) {
                 // Flip if back face/inside
-                const bool front_facing = mm::vec3::dot(I, intersecton.normal) < 0.0f;
-                const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersecton.normal);
+                const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
+                const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersection.normal);
                 const float 
                     n1 = front_facing ? source_refraction : material.indexOfRefraction,
                     n2 = front_facing ? material.indexOfRefraction : source_refraction
@@ -86,15 +86,7 @@ class CPURaytracer final : public AbstractRayTracer {
             return color.map(mm::clamp, 0.0f, 1.0f);
         }
 
-        [[nodiscard]] virtual const unsigned char* run(const Camera& camera) override {
-            // Compute the camera ray for the given (x,y) image pixel
-            // See http://www.unknownroad.com/rtfm/graphics/rt_eyerays.html
-            const mm::vec3
-                localZ = mm::vec3::normalize(camera.look_pos - camera.eye_pos),
-                localX = mm::vec3::normalize(mm::vec3::cross(localZ,  1.0f - mm::abs(mm::vec3::dot(localZ, mm::vec3(0.0f, 1.0f, 0.0f))) < 1e-3 ? mm::vec3(1.0f, 0.0f, 0.0f) : mm::vec3(0.0f, 1.0f, 0.0f))),
-                localY = mm::vec3::normalize(mm::vec3::cross(localX, localZ))
-            ;
-
+        virtual void run(const Camera& camera, const mm::vec3& localX, const mm::vec3& localY, const mm::vec3& localZ) override {
             for(unsigned int py = 0; py < this->HEIGHT; py++) {
                 for(unsigned int px = 0; px < this->WIDTH; px++) {
                     const unsigned int idx = (py*this->WIDTH + px)*AbstractRayTracer::CHANNELS;
@@ -104,7 +96,7 @@ class CPURaytracer final : public AbstractRayTracer {
                     for(float dx = this->ANTIALIASING.STRIDE/2.0f; dx < 1.0f; dx += this->ANTIALIASING.STRIDE) {
                         for(float dy = this->ANTIALIASING.STRIDE/2.0f; dy < 1.0f; dy += this->ANTIALIASING.STRIDE) {
                             const float x = (2.0f*(px + dx) - (float) this->WIDTH)/(float) this->WIDTH*mm::tan(camera.hfov(this->WIDTH, this->HEIGHT)/2);
-                            const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float)this->HEIGHT*mm::tan(camera.vfov/2);
+                            const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float) this->HEIGHT*mm::tan(camera.vfov/2);
                             
                             const Ray ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY));
                             const Intersection intersection = Intersection::of(ray, this->S_SHAPEC, this->S_SHAPEV);
@@ -119,7 +111,5 @@ class CPURaytracer final : public AbstractRayTracer {
                     this->_bytes[idx + 3] = static_cast<unsigned char>(1.0f*255);
                 }
             }
-
-            return this->_bytes;
         }
 };

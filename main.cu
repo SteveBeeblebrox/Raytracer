@@ -5,6 +5,7 @@
 #include <string>
 #include <vector>
 #include <stdexcept>
+#include <memory>
 
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "include/stb_image_write.h"
@@ -14,10 +15,99 @@
 #include "util.hpp"
 #include "Types.hpp"
 #include "CPURaytracer.hpp"
+#include "GPURaytracer.hpp"
 
 int main(int argc, const char** argv) {
-    if(argc > 1) {
+    const std::string HELP_TEXT = std::string(util::string::trim(R"(
+Usage: ./raytracer config.json runtime.json
+       ./raytracer --help
+
+REPL commands:
+?/h/help       - Show help message
+q/quit/exit    - Exit repl
+s/stat         - Show scene debug info
+r/run          - Render frame to 'render.png'
+tp <x> <y> <z> - Move the arcball camera to x, y, z
+
+config.json:
+```
+{
+    "schema": "scene", 
+    "resolution": [int, int]          (Default 1920x1080),
+    "antialiasing": int               (Default 1, 2**(n+1) samples per pixel),
+    "camera": {
+        "pos": [float, float, float],
+        "fov": float                  (Default 45, in degrees)
+    },
+    "scene": [
+        {
+            "type": "sphere",
+            "pos": [float, float, float],
+            "radius": float,
+            "material": {
+                "diffuse": [float, float, float],
+                "ambient": [float, float, float],
+                "specular": [float, float, float],
+                "shininess": float,
+                "reflectivity": float,
+                "refraction": float,
+                "alpha": float
+            }
+        },
+        {
+            "type": "plane",
+            "pos": [float, float, float],
+            "normal": [float, float, float],
+            "material": {
+                ...
+            }
+        },
+        {
+            "type": "light",
+            "pos": [float, float, float],
+            "diffuse": [float, float, float],
+            "ambient": [float, float, float],
+            "specular": [float, float, float]
+        },
+        ...
+    ]
+}
+```
+
+runtime.json:
+```
+{
+    "schema": "runtime",
+    "target": "gpu" | "cpu" (Default "cpu"),
+    "gpu_tweaks": {
+        "block_width":       int (Default 16),
+        "block_height":      int (Default 16),
+        "partition_objects": bool (Default false),
+        "buffer_objects":    bool (Default false),
+        "layered":           bool (Default false)
+    }
+}
+```
+    )"));
+
+    if(argc > 1 && (argv[1] == std::string("?") || argv[1] == std::string("-h") || argv[1] == std::string("--help"))) {
+        std::cerr << HELP_TEXT << std::endl;
+        return 0;
+    }
+
+    if(argc == 3) {
         json::ValueT config = json::parse(util::cat(argv[1]));
+        json::ValueT runtime = json::parse(util::cat(argv[2]));
+
+        if(json::get<json::StringT>(config, "schema", "") != "scene") {
+            util::error("First json has schema '%s', expected 'scene' (Do you need to swap the order of arguments?)!", json::get<json::StringT>(config, "schema", ""));
+            return 2;
+        } 
+
+        if(json::get<json::StringT>(runtime, "schema", "") != "runtime") {
+            util::error("Second json has schema '%s', expected 'runtime'!", json::get<json::StringT>(runtime, "schema", ""));
+            return 2;
+        } 
 
         std::vector<Shape> shapes;
         std::vector<Light> lights;
@@ -58,7 +148,21 @@ int main(int argc, const char** argv) {
             shapes.push_back(shape);
         }
         
-        auto raytracer = CPURaytracer(json::get<json::NumberT>(config, "resolution[0]", 1920.0f), json::get<json::NumberT>(config, "resolution[1]", 1080.0f), json::get<json::NumberT>(config, "antialiasing", 1.0f), shapes.size(), shapes.data(), lights.size(), lights.data());
+        const float width = json::get<json::NumberT>(config, "resolution[0]", 1920.0f), height = json::get<json::NumberT>(config, "resolution[1]", 1080.0f);
+        const unsigned int aa_level = json::get<json::NumberT>(config, "antialiasing", 1.0f);
+        const std::string target = json::get<json::StringT>(runtime, "target", "cpu");
+        const unsigned int block_width = json::get<json::NumberT>(config, "gpu_tweaks.block_width", 16.0f), block_height = json::get<json::NumberT>(config, "gpu_tweaks.block_height", 16.0f);
+
+        std::unique_ptr<AbstractRayTracer> raytracer = nullptr;
+        
+        if(target == "gpu") {
+            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), lights.size(), lights.data(), block_width, block_height);
+        } else {
+            if(target != "cpu") {
+                util::warn("Unknown runtime target '%s' (Use 'cpu' or 'gpu')", target);
+            }
+            raytracer = std::make_unique<CPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), lights.size(), lights.data());
+        }
 
         Camera camera = {
             .eye_pos = mm::vec3(
@@ -73,27 +177,27 @@ int main(int argc, const char** argv) {
             util::warn("No lights defined in '%s'!", argv[1]);
         }
 
-        std::cout << "\033[96;1m>\033[0m ";
-        for (std::string line; std::getline(std::cin, line); std::cout << "\033[96;1m>\033[0m ") {
+        std::cerr << "\033[96;1m>\033[0m ";
+        for (std::string line; std::getline(std::cin, line); std::cerr << "\033[96;1m>\033[0m ") {
             line = util::string::trim(line);
             if(line.empty()) {
                 continue;
             } else if(line == "?" || line == "h" || line == "help") {
-                std::cout << util::string::trim(R"(
-?/h/help       - Show help message
-q/quit/exit    - Exit repl
-s/stat         - Show scene debug info
-r/run          - Render frame to 'render.png'
-tp <x> <y> <z> - Move the arcball camera to x, y, z
-                )") << std::endl;
+                std::cerr << HELP_TEXT << std::endl;
             } else if(line == "q" || line == "quit" || line == "exit") {
                 break;
             } else if(line == "s" || line == "stat") {
-                std::cout << "Static Shapes:      " << shapes.size() << std::endl;
-                std::cout << "Lights:             " << lights.size() << std::endl;
-                std::cout << "Resolution:         " << raytracer.WIDTH << "x" << raytracer.HEIGHT << std::endl;
-                std::cout << "Antialiasing Level: " << raytracer.ANTIALIASING.LEVEL << " (" << (raytracer.ANTIALIASING.SAMPLES) << " samples)" << std::endl;
-                std::cout << "Camera Pos:         " << camera.eye_pos.x() << ", " << camera.eye_pos.y() << ", " << camera.eye_pos.z() << std::endl;
+                std::cerr << "Target:             " << target << std::endl;
+                if(target == "gpu") {
+                    std::cerr << "Block Size:         " << block_width << "x" << block_height << std::endl;
+                } else {
+                    std::cerr << "Block Size:         N/A" << std::endl;
+                }
+                std::cerr << "Static Shapes:      " << shapes.size() << std::endl;
+                std::cerr << "Lights:             " << lights.size() << std::endl;
+                std::cerr << "Resolution:         " << raytracer->WIDTH << "x" << raytracer->HEIGHT << std::endl;
+                std::cerr << "Antialiasing Level: " << raytracer->ANTIALIASING.LEVEL << " (" << (raytracer->ANTIALIASING.SAMPLES) << " samples)" << std::endl;
+                std::cerr << "Camera Pos:         " << camera.eye_pos.x() << ", " << camera.eye_pos.y() << ", " << camera.eye_pos.z() << std::endl;
             
             } else if(util::string::starts_with(line, "tp ")) {
                 std::stringstream stream(line.substr(3));
@@ -105,10 +209,10 @@ tp <x> <y> <z> - Move the arcball camera to x, y, z
                     camera.eye_pos = mm::vec3(x, y, z);
                 }
             } else if(line == "r" || line == "run") {
-                std::cout << "Rendering..." << std::endl;
-                const unsigned char* const bytes = raytracer.run(camera);
+                std::cerr << "Rendering..." << std::endl;
+                raytracer->run(camera);
 
-                if(!stbi_write_png("render.png", raytracer.WIDTH, raytracer.HEIGHT, AbstractRayTracer::CHANNELS, bytes, AbstractRayTracer::CHANNELS*raytracer.WIDTH)) {
+                if(!stbi_write_png("render.png", raytracer->WIDTH, raytracer->HEIGHT, AbstractRayTracer::CHANNELS, raytracer->bytes(), AbstractRayTracer::CHANNELS*raytracer->WIDTH)) {
                     util::error("Unable to write to '%s'", "render.png");
                 }
             } else {
@@ -116,7 +220,7 @@ tp <x> <y> <z> - Move the arcball camera to x, y, z
             }
         }
     } else {
-        util::error("Expected 2 arguments, got %d!", argc);
+        util::error("Expected 2 arguments (`./raytracer config.json runtime.json`), got %d!", argc);
         return 1;
     }
 
