@@ -23,7 +23,7 @@ class AbstractRayTracer : NonCopyable {
             WIDTH(width), HEIGHT(height),
             ANTIALIASING { antialiasing, (float) ((antialiasing + 1)*(antialiasing + 1)), 1.0f/((float) antialiasing + 1.0f)}
         {
-            this->_bytes = new unsigned char[this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS];
+            this->_bytes = new unsigned char[this->size()];
         }
 
         virtual ~AbstractRayTracer() {
@@ -48,7 +48,7 @@ class AbstractRayTracer : NonCopyable {
             return this->_bytes;
         }
 
-        [[nodiscard]] virtual unsigned int len_bytes() const final {
-            return sizeof(float)*this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS;
+        [[nodiscard]] virtual unsigned int size() const final {
+            return this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS;
         }
 };
