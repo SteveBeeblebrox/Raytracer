@@ -12,6 +12,7 @@
 #include "include/stb_image_write.h"
 #include "include/json.hpp"
 #include "include/mm.hpp"
+#include "include/f8.hpp"
 
 #include "util.hpp"
 #include "Types.hpp"
@@ -44,7 +45,7 @@ config.json (For configuring scene and results):
         {
             "type": "sphere",
             "pos": [float, float, float],
-            "radius": float,
+            "radius": float | "_dynamic",
             "material": {
                 "diffuse": [float, float, float],
                 "ambient": [float, float, float],
@@ -112,10 +113,12 @@ runtime.json (For configuring performance and parallelism):
 
         std::vector<Shape> shapes;
         std::vector<Light> lights;
+        unsigned int dshapec = 0;
 
         for(const json::ValueT& entry : json::get<json::ListT>(config, "scene", std::vector<json::ValueT>())) {
             Shape shape = {};
             const std::string type = json::get<json::StringT>(entry, "type");
+            bool dynamic = false;
             if(util::string::starts_with(type, "_")) {
                 continue;
             } else if(type == "light") {
@@ -129,7 +132,15 @@ runtime.json (For configuring performance and parallelism):
             } else if(type == "sphere") {
                 shape.type = Shape::SPHERE;
                 shape.as_sphere.pos = mm::vec3(json::get<json::NumberT>(entry, "pos[0]", 0.0f), json::get<json::NumberT>(entry, "pos[1]", 0.0f), json::get<json::NumberT>(entry, "pos[2]", 0.0f));
-                shape.as_sphere.radius = json::get<json::NumberT>(entry, "radius", 1.0f);
+                
+                #pragma GCC diagnostic push
+                #pragma GCC diagnostic ignored "-Wparentheses"
+                if(dynamic = (json::get<json::StringT>(entry, "radius", "") == "_dynamic")) {
+                    shape.as_sphere.radius = 0.0f;
+                } else {
+                    shape.as_sphere.radius = json::get<json::NumberT>(entry, "radius", 1.0f);
+                }
+                #pragma GCC diagnostic pop
             } else if(type == "plane") {
                 shape.type = Shape::PLANE;
                 shape.as_plane.pos = mm::vec3(json::get<json::NumberT>(entry, "pos[0]", 0.0f), json::get<json::NumberT>(entry, "pos[1]", 0.0f), json::get<json::NumberT>(entry, "pos[2]", 0.0f));
@@ -146,7 +157,12 @@ runtime.json (For configuring performance and parallelism):
             shape.material.indexOfRefraction = json::get<json::NumberT>(entry, "material.refraction", 1.0f);
             shape.material.alpha = json::get<json::NumberT>(entry, "material.alpha", 1.0f);
 
-            shapes.push_back(shape);
+            if(dynamic) {
+                dshapec++;
+                shapes.insert(shapes.begin(), shape); // Not idea to prepend to vec, but it's only once while loading
+            } else {
+                shapes.push_back(shape);
+            }
         }
         
         const float width = json::get<json::NumberT>(config, "resolution[0]", 1920.0f), height = json::get<json::NumberT>(config, "resolution[1]", 1080.0f);
@@ -157,7 +173,7 @@ runtime.json (For configuring performance and parallelism):
         std::unique_ptr<AbstractRayTracer> raytracer = nullptr;
         
         if(target == "gpu") {
-            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), lights.size(), lights.data(), block_width, block_height);
+            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), block_width, block_height);
         } else {
             if(target != "cpu") {
                 util::warn("Unknown runtime target '%s' (Use 'cpu' or 'gpu')", target);
@@ -199,10 +215,12 @@ runtime.json (For configuring performance and parallelism):
                 } else {
                     std::cerr << "Block Size:         N/A" << std::endl;
                 }
-                std::cerr << "Static Shapes:      " << shapes.size() << std::endl;
-                std::cerr << "Lights:             " << lights.size() << std::endl;
                 std::cerr << "Resolution:         " << raytracer->WIDTH << "x" << raytracer->HEIGHT << std::endl;
                 std::cerr << "Antialiasing Level: " << raytracer->ANTIALIASING.LEVEL << " (" << (raytracer->ANTIALIASING.SAMPLES) << " samples)" << std::endl;
+                std::cerr << "Total Shapes:       " << shapes.size() << std::endl;
+                std::cerr << "Static Shapes:      " << shapes.size() - dshapec << std::endl;
+                std::cerr << "Dynamic Shapes:     " << dshapec << std::endl;
+                std::cerr << "Lights:             " << lights.size() << std::endl;
                 std::cerr << "Camera Pos:         " << camera.eye_pos.x() << ", " << camera.eye_pos.y() << ", " << camera.eye_pos.z() << std::endl;
             
             } else if(util::string::starts_with(line, "tp ")) {
@@ -216,6 +234,13 @@ runtime.json (For configuring performance and parallelism):
                 }
             } else if(line == "r" || line == "run") {
                 std::cerr << "Rendering..." << std::endl;
+
+                // Dummy "animation"
+                for(Shape* shape = shapes.data(); shape < shapes.data() + dshapec; shape++) {
+                    if(shape->type == Shape::SPHERE) {
+                        shape->as_sphere.radius = f8::randf()*0.5f + 0.25f;
+                    }
+                }
 
                 auto start = std::chrono::high_resolution_clock::now();
                 raytracer->run(camera);

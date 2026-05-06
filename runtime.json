@@ -4,7 +4,7 @@
     "gpu_tweaks": {
         "block_width": 16,
         "block_height": 16,
-        "partition_objects": false,
+        "partition_objects": true,
         "buffer_objects": false,
         "layered": false
     }

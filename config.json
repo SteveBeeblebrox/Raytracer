@@ -9,6 +9,14 @@
     "scene": [
         {
             "type": "sphere",
+            "pos": [0.35, 0.5, 1.0],
+            "radius": "_dynamic",
+            "material": {
+                "diffuse": [1, 1, 1]
+            }
+        },
+        {
+            "type": "sphere",
             "pos": [0,0.5,0],
             "radius": 0.5,
             "material": {

@@ -133,25 +133,30 @@ class GPURaytracer final : public AbstractRayTracer {
         cudaStream_t _stream;
         unsigned char* _d_bytes;
 
+        Shape* SHAPEV;
         Shape* _d_SHAPEV;
         const unsigned int SHAPEC;
+        const unsigned int DSHAPEC;
 
         Light* _d_LIGHTV;
         const unsigned int LIGHTC;
 
     public:
         const unsigned int BLOCK_WIDTH, BLOCK_HEIGHT;  
+        const bool PARTITION_OBJECTS;
 
         GPURaytracer(
             const unsigned int width, const unsigned int height,
             const unsigned int antialiasing,
-            const unsigned int shapec, const Shape* shapev,
+            const unsigned int shapec, Shape* shapev, const unsigned int dshapec,
             const unsigned int lightc, const Light* lightv,
+            const bool partition_objects = false,
             const unsigned int block_width = 16, const unsigned int block_height = 16
         ) : 
             AbstractRayTracer(width, height, antialiasing),
+            PARTITION_OBJECTS(partition_objects),
             BLOCK_WIDTH(block_width), BLOCK_HEIGHT(block_height),
-            SHAPEC(shapec), LIGHTC(lightc)
+            SHAPEV(shapev), SHAPEC(shapec), DSHAPEC(dshapec), LIGHTC(lightc)
         {
             cudaStreamCreate(&this->_stream);
             cudaMalloc(&this->_d_bytes, this->size());
@@ -179,6 +184,19 @@ class GPURaytracer final : public AbstractRayTracer {
         }
 
         virtual void run(const Camera& camera, const mm::vec3& localX, const mm::vec3& localY, const mm::vec3& localZ) override {
+            // Copy objects again after update (CPURaytracer doesn't have to do this since the data lives on the CPU where the
+            // animation happens unlike here where the data lives on the GPU). Alernative solutions include doing updates on the
+            // GPU instead which is good for particles but not input based changes.
+            
+            // There's no reason you wouldn't partition your objects like this irl (assuming you know ahead of time which are dynamic).
+            // The only real complexity comes while loading data and tracking a second pointer and/or offset; afterwards, it's as simple
+            // as only copying part of the data.
+            if(this->PARTITION_OBJECTS) {
+                cudaMemcpy(this->_d_SHAPEV, this->SHAPEV, sizeof(Shape)*this->DSHAPEC, cudaMemcpyHostToDevice);
+            } else {
+                cudaMemcpy(this->_d_SHAPEV, this->SHAPEV, sizeof(Shape)*this->SHAPEC, cudaMemcpyHostToDevice);
+            }
+            
             // Launch kernel
             cuda_raytracer_v1<<<
                 dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),

@@ -4,18 +4,18 @@
 
 class CPURaytracer final : public AbstractRayTracer {
     private:
-        const unsigned int S_SHAPEC;
-        const Shape* S_SHAPEV;
+        const unsigned int SHAPEC;
+        Shape* SHAPEV;
 
-        const unsigned int S_LIGHTC;
-        const Light* S_LIGHTV;
+        const unsigned int LIGHTC;
+        const Light* LIGHTV;
     public:
         CPURaytracer(
             const unsigned int width, const unsigned int height,
             const unsigned int antialiasing,
-            const unsigned int s_shapec, const Shape* s_shapev,
-            const unsigned int s_lightc, const Light* s_lightv
-        ) : AbstractRayTracer(width, height, antialiasing), S_SHAPEC(s_shapec), S_SHAPEV(s_shapev), S_LIGHTC(s_lightc), S_LIGHTV(s_lightv) {}
+            const unsigned int shapec, Shape* shapev,
+            const unsigned int lightc, const Light* lightv
+        ) : AbstractRayTracer(width, height, antialiasing), SHAPEC(shapec), SHAPEV(shapev), LIGHTC(lightc), LIGHTV(lightv) {}
 
         virtual ~CPURaytracer() override {}
 
@@ -35,8 +35,8 @@ class CPURaytracer final : public AbstractRayTracer {
 
             color += material.ambient*0.05f;
 
-            for(const Light* light = this->S_LIGHTV; light < this->S_LIGHTV + this->S_LIGHTC; light++) {
-                if(float transmission = Light::transmission(p, *light, this->S_SHAPEC, this->S_SHAPEV); transmission > 0.0f) {
+            for(const Light* light = this->LIGHTV; light < this->LIGHTV + this->LIGHTC; light++) {
+                if(float transmission = Light::transmission(p, *light, this->SHAPEC, this->SHAPEV); transmission > 0.0f) {
                     const mm::vec3
                         N = mm::vec3::normalize(intersection.normal),
                         L = mm::vec3::normalize(light->pos - p),
@@ -71,14 +71,14 @@ class CPURaytracer final : public AbstractRayTracer {
                 ;
                  
                 const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
-                const mm::vec3 reflection = reflectivity > 0.0f ? this->shade(Intersection::of(reflection_ray, this->S_SHAPEC, this->S_SHAPEV), reflection_ray, n1, bounces + 1) : mm::vec3(0.0f);
+                const mm::vec3 reflection = reflectivity > 0.0f ? this->shade(Intersection::of(reflection_ray, this->SHAPEC, this->SHAPEV), reflection_ray, n1, bounces + 1) : mm::vec3(0.0f);
 
                 // Snell's law for refraction
                 // https://en.wikipedia.org/wiki/Snell%27s_law#Vector_form
                 // See https://registry.khronos.org/OpenGL-Refpages/gl4/html/refract.xhtml
                 const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
                 const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
-                const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? this->shade(Intersection::of(refraction_ray, this->S_SHAPEC, this->S_SHAPEV), refraction_ray, n2, bounces + 1) : mm::vec3(0.0f);
+                const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? this->shade(Intersection::of(refraction_ray, this->SHAPEC, this->SHAPEV), refraction_ray, n2, bounces + 1) : mm::vec3(0.0f);
 
                 color = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*color; 
             }
@@ -99,7 +99,7 @@ class CPURaytracer final : public AbstractRayTracer {
                             const float y = (2.0f*(py + dy) - (float) this->HEIGHT)/(float) this->HEIGHT*mm::tan(camera.vfov/2);
                             
                             const Ray ray(camera.eye_pos, mm::vec3::normalize(localZ + x*localX - y*localY));
-                            const Intersection intersection = Intersection::of(ray, this->S_SHAPEC, this->S_SHAPEV);
+                            const Intersection intersection = Intersection::of(ray, this->SHAPEC, this->SHAPEV);
 
                             color += (1.0f/this->ANTIALIASING.SAMPLES)*this->shade(intersection, ray, 1.0f, 0);
                         }
