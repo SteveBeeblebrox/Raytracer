@@ -54,14 +54,6 @@ __device__ [[nodiscard]] mm::vec3 cuda_shade_v2_base_color(
     return color.map(mm::clamp, 0.0f, 1.0f);
 }
 
-// template<> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1<AbstractRayTracer::ITERATIONS + 1>(
-//     const Intersection& intersection, const Ray& ray, const float source_refraction,
-//     const unsigned int shapec, const Shape* __restrict__ shapev,
-//     const unsigned int lightc, const Light* __restrict__ lightv
-// ) {
-//     return mm::vec3(0.0f, 0.0f, 0.0f);
-// }
-
 __global__ void cuda_raytracer_v2_merge_down(
     const unsigned int layerStart, const unsigned int layerSize,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -73,35 +65,38 @@ __global__ void cuda_raytracer_v2_merge_down(
 
     if(idx < layerSize) {
         const Intersection intersection = layers[layerStart + idx].intersection;
-        const Material& material = *intersection.material;
-        const mm::vec3 I = mm::vec3::normalize(layers[layerStart + idx].direction);
+        if(intersection.is_valid()) {
 
-        // Flip if back face/inside
-        const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
-        const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersection.normal);
-        const float 
-            n1 = front_facing ? layers[layerStart + idx].source_refraction : material.indexOfRefraction,
-            n2 = front_facing ? material.indexOfRefraction : layers[layerStart + idx].source_refraction
-        ;
-
-        // Compute Fresnel reflection coefficient using Schlick's Approximation
-        // https://en.wikipedia.org/wiki/Schlick%27s_approximation
-        const float R0 = mm::pow((n1 - n2)/(n1 + n2), 2.0f);
-        const float R = R0 + (1 - R0)*mm::pow(1 - mm::clamp(-mm::vec3::dot(I, N), -1.0f, 1.0f), 5.0f);
-
-        // Combine Fresnel weights with explicit material weights
-        // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
-        const float 
-            reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
-            refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
-        ;
-
-        const mm::vec3 reflection = reflectivity > 0.0f ? layers[layerStart + layerSize + idx*2].baseColor : mm::vec3(0.0f);
-        
-        const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
-        const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? layers[layerStart + layerSize + idx*2 + 1].baseColor : mm::vec3(0.0f);
-
-        layers[layerStart + idx].baseColor = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*layers[layerStart + idx].baseColor;
+            const Material& material = *intersection.material;
+            const mm::vec3 I = mm::vec3::normalize(layers[layerStart + idx].direction);
+    
+            // Flip if back face/inside
+            const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
+            const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersection.normal);
+            const float 
+                n1 = front_facing ? layers[layerStart + idx].source_refraction : material.indexOfRefraction,
+                n2 = front_facing ? material.indexOfRefraction : layers[layerStart + idx].source_refraction
+            ;
+    
+            // Compute Fresnel reflection coefficient using Schlick's Approximation
+            // https://en.wikipedia.org/wiki/Schlick%27s_approximation
+            const float R0 = mm::pow((n1 - n2)/(n1 + n2), 2.0f);
+            const float R = R0 + (1 - R0)*mm::pow(1 - mm::clamp(-mm::vec3::dot(I, N), -1.0f, 1.0f), 5.0f);
+    
+            // Combine Fresnel weights with explicit material weights
+            // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
+            const float 
+                reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
+                refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
+            ;
+    
+            const mm::vec3 reflection = reflectivity > 0.0f ? layers[layerStart + layerSize + idx*2].baseColor : mm::vec3(0.0f);
+            
+            const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
+            const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? layers[layerStart + layerSize + idx*2 + 1].baseColor : mm::vec3(0.0f);
+    
+            layers[layerStart + idx].baseColor = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*layers[layerStart + idx].baseColor;
+        }
     }
 }
 
@@ -116,27 +111,49 @@ __global__ void cuda_raytracer_v2_spawn_next(
 
     if(idx < layerSize) {
         const Intersection intersection = layers[layerStart + idx].intersection;
-        const Material& material = *intersection.material;
-        const mm::vec3 I = mm::vec3::normalize(layers[layerStart + idx].direction), p = intersection.pos;
 
-        // Flip if back face/inside
-        const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
-        const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersection.normal);
-        const float 
-            n1 = front_facing ? layers[layerStart + idx].source_refraction : material.indexOfRefraction,
-            n2 = front_facing ? material.indexOfRefraction : layers[layerStart + idx].source_refraction
-        ;
-
-        // Spawn reflection
-        const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
-        const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
-        layers[layerStart + layerSize + idx*2] = {reflection_intersection, reflection_ray.direction, cuda_shade_v2_base_color(reflection_intersection, reflection_ray, shapec, shapev, lightc, lightv), n1};
+        if(intersection.is_valid()) {
+            const Material& material = *intersection.material;
+            const mm::vec3 I = mm::vec3::normalize(layers[layerStart + idx].direction), p = intersection.pos;
     
-        // Spawn refraction
-        const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
-        const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
-        const Intersection refraction_intersection = Intersection::of(reflection_ray, shapec, shapev);
-        layers[layerStart + layerSize + idx*2 + 1] = {refraction_intersection, refraction_ray.direction, cuda_shade_v2_base_color(refraction_intersection, refraction_ray, shapec, shapev, lightc, lightv), n2};
+            // Flip if back face/inside
+            const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
+            const mm::vec3 N = (2.0f*front_facing - 1.0f)*mm::vec3::normalize(intersection.normal);
+            const float 
+                n1 = front_facing ? layers[layerStart + idx].source_refraction : material.indexOfRefraction,
+                n2 = front_facing ? material.indexOfRefraction : layers[layerStart + idx].source_refraction
+            ;
+    
+            // Compute Fresnel reflection coefficient using Schlick's Approximation
+            // https://en.wikipedia.org/wiki/Schlick%27s_approximation
+            const float R0 = mm::pow((n1 - n2)/(n1 + n2), 2.0f);
+            const float R = R0 + (1 - R0)*mm::pow(1 - mm::clamp(-mm::vec3::dot(I, N), -1.0f, 1.0f), 5.0f);
+
+            // Combine Fresnel weights with explicit material weights
+            // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
+            const float 
+                reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
+                _refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
+            ;
+
+            // Spawn reflection
+            const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
+            const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
+            if(reflectivity > 0.0f) {
+                layers[layerStart + layerSize + idx*2] = {reflection_intersection, reflection_ray.direction, cuda_shade_v2_base_color(reflection_intersection, reflection_ray, shapec, shapev, lightc, lightv), n1};
+            }
+        
+            // Spawn refraction
+            const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
+            const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
+            const Intersection refraction_intersection = Intersection::of(refraction_ray, shapec, shapev);
+            if(material.alpha < 1.0f && k >= 0.0f) {
+                layers[layerStart + layerSize + idx*2 + 1] = {refraction_intersection, refraction_ray.direction, cuda_shade_v2_base_color(refraction_intersection, refraction_ray, shapec, shapev, lightc, lightv), n2};
+            }
+        } else {
+            layers[layerStart + layerSize + idx*2] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+            layers[layerStart + layerSize + idx*2 + 1] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+        }
     }
 }
 
@@ -286,13 +303,6 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                 this->_d_layers
             );
 
-            cudaError_t error;
-            if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
-                util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
-            }
-
-/*
-
             // Propagate reflections and refractions from layer `bounce` into layer `bounce + 1`
             for(unsigned int bounce = 0; bounce < AbstractRayTracer::ITERATIONS; bounce++) {
                 // Start offset of layer, size of this layer
@@ -307,10 +317,6 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                     this->LIGHTC, this->_d_LIGHTV,
                     this->_d_layers
                 );
-
-                if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
-                    util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
-                }
             }
 
             // Merge `baseColor` from relections and refractions in layer `bounce + 1` into layer `bounce`
@@ -327,15 +333,10 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                     this->_d_layers
                 );
 
-                if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
-                    util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
-                }
-
                 if(bounce == 0) {
                     break;
                 }
             }
-*/
 
             // Average AA rays
             cuda_raytracer_v2_finalize<<<
@@ -346,10 +347,6 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
                 this->ANTIALIASING.SAMPLES,
                 this->_d_layers, this->_d_bytes
             );
-
-            if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
-                util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);
-            }
 
             // Copy data out
             cudaMemcpy(this->_bytes, this->_d_bytes, this->size(), cudaMemcpyDeviceToHost);
