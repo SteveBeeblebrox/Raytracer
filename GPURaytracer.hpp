@@ -152,18 +152,18 @@ class GPURaytracer final : public AbstractRayTracer {
 
     public:
         const unsigned int BLOCK_WIDTH, BLOCK_HEIGHT;  
-        const bool PARTITION_OBJECTS, BUFFER_OBJECTS;
+        const bool PARTITION_OBJECTS, BUFFER_OBJECTS, LAYERED;
 
         GPURaytracer(
             const unsigned int width, const unsigned int height,
             const unsigned int antialiasing,
             const unsigned int shapec, Shape* shapev, const unsigned int dshapec,
             const unsigned int lightc, const Light* lightv,
-            const bool partition_objects = false, const bool buffer_objects = false,
+            const bool partition_objects = false, const bool buffer_objects = false, const bool layered = false,
             const unsigned int block_width = 16, const unsigned int block_height = 16
         ) : 
             AbstractRayTracer(width, height, antialiasing),
-            PARTITION_OBJECTS(partition_objects), BUFFER_OBJECTS(buffer_objects),
+            PARTITION_OBJECTS(partition_objects), BUFFER_OBJECTS(buffer_objects), LAYERED(layered),
             BLOCK_WIDTH(block_width), BLOCK_HEIGHT(block_height),
             SHAPEV(shapev), SHAPEC(shapec), DSHAPEC(dshapec), LIGHTC(lightc)
         {
