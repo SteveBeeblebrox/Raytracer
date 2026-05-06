@@ -16,8 +16,8 @@ __global__ void dummy_kernel() {}
 
 template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
-    const unsigned int shapec, const Shape* shapev,
-    const unsigned int lightc, const Light* lightv
+    const unsigned int shapec, const Shape* __restrict__ shapev,
+    const unsigned int lightc, const Light* __restrict__ lightv
 ) {
     mm::vec3 color(0.0f, 0.0f, 0.0f);
 
@@ -87,21 +87,30 @@ template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
 
 template<> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1<AbstractRayTracer::ITERATIONS + 1>(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
-    const unsigned int shapec, const Shape* shapev,
-    const unsigned int lightc, const Light* lightv
+    const unsigned int shapec, const Shape* __restrict__ shapev,
+    const unsigned int lightc, const Light* __restrict__ lightv
 ) {
     return mm::vec3(0.0f, 0.0f, 0.0f);
 }
 
-__global__ void cuda_raytracer_v1(
+template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v1(
     const unsigned int WIDTH, const unsigned int HEIGHT,
     const float ANTIALIASING_SAMPLES, const float ANTIALIASING_STRIDE,
     const mm::vec3 LOCAL_X, const mm::vec3 LOCAL_Y, const mm::vec3 LOCAL_Z,
     const float HFOV, const float VFOV, const mm::vec3 EYE_POS,
-    const unsigned int shapec, const Shape* shapev,
-    const unsigned int lightc, const Light* lightv,
+    const unsigned int shapec, const Shape* __restrict__ shapev,
+    const unsigned int lightc, const Light* __restrict__ lightv,
     unsigned char* bytes
 ) {
+    extern __shared__ Shape shapev_buf[];
+
+    if constexpr (BUFFER_OBJECTS) {
+        for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
+            shapev_buf[i] = shapev[i];
+        }
+        __syncthreads();
+    }
+
     const unsigned int px = blockIdx.x*blockDim.x + threadIdx.x;
     const unsigned int py = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -115,9 +124,9 @@ __global__ void cuda_raytracer_v1(
                 const float y = (2.0f*(py + dy) - (float) HEIGHT)/(float) HEIGHT*mm::tan(VFOV/2);
                 
                 const Ray ray(EYE_POS, mm::vec3::normalize(LOCAL_Z + x*LOCAL_X - y*LOCAL_Y));
-                const Intersection intersection = Intersection::of(ray, shapec, shapev);
+                const Intersection intersection = Intersection::of(ray, shapec, BUFFER_OBJECTS ? shapev_buf : shapev);
 
-                color += (1.0f/ANTIALIASING_SAMPLES)*cuda_shade_v1<0>(intersection, ray, 1.0f, shapec, shapev, lightc, lightv);
+                color += (1.0f/ANTIALIASING_SAMPLES)*cuda_shade_v1<0>(intersection, ray, 1.0f, shapec, BUFFER_OBJECTS ? shapev_buf : shapev, lightc, lightv);
             }
         }
 
@@ -143,18 +152,18 @@ class GPURaytracer final : public AbstractRayTracer {
 
     public:
         const unsigned int BLOCK_WIDTH, BLOCK_HEIGHT;  
-        const bool PARTITION_OBJECTS;
+        const bool PARTITION_OBJECTS, BUFFER_OBJECTS;
 
         GPURaytracer(
             const unsigned int width, const unsigned int height,
             const unsigned int antialiasing,
             const unsigned int shapec, Shape* shapev, const unsigned int dshapec,
             const unsigned int lightc, const Light* lightv,
-            const bool partition_objects = false,
+            const bool partition_objects = false, const bool buffer_objects = false,
             const unsigned int block_width = 16, const unsigned int block_height = 16
         ) : 
             AbstractRayTracer(width, height, antialiasing),
-            PARTITION_OBJECTS(partition_objects),
+            PARTITION_OBJECTS(partition_objects), BUFFER_OBJECTS(buffer_objects),
             BLOCK_WIDTH(block_width), BLOCK_HEIGHT(block_height),
             SHAPEV(shapev), SHAPEC(shapec), DSHAPEC(dshapec), LIGHTC(lightc)
         {
@@ -197,20 +206,37 @@ class GPURaytracer final : public AbstractRayTracer {
                 cudaMemcpy(this->_d_SHAPEV, this->SHAPEV, sizeof(Shape)*this->SHAPEC, cudaMemcpyHostToDevice);
             }
             
-            // Launch kernel
-            cuda_raytracer_v1<<<
-                dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
-                dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT)
-                // , TODO:
-            >>>(
-                this->WIDTH, this->HEIGHT,
-                this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
-                localX, localY, localZ,
-                camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
-                this->SHAPEC, this->_d_SHAPEV,
-                this->LIGHTC, this->_d_LIGHTV,
-                this->_d_bytes
-            );
+            if(this->BUFFER_OBJECTS) {
+                // Launch kernel
+                cuda_raytracer_v1<true><<<
+                    dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
+                    dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT),
+                    this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                >>>(
+                    this->WIDTH, this->HEIGHT,
+                    this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
+                    localX, localY, localZ,
+                    camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
+                    this->SHAPEC, this->_d_SHAPEV,
+                    this->LIGHTC, this->_d_LIGHTV,
+                    this->_d_bytes
+                );
+            } else {
+                // Launch kernel
+                cuda_raytracer_v1<false><<<
+                    dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
+                    dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT),
+                    this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                >>>(
+                    this->WIDTH, this->HEIGHT,
+                    this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
+                    localX, localY, localZ,
+                    camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
+                    this->SHAPEC, this->_d_SHAPEV,
+                    this->LIGHTC, this->_d_LIGHTV,
+                    this->_d_bytes
+                );
+            }
 
             // Copy data out
             cudaMemcpy(this->_bytes, this->_d_bytes, this->size(), cudaMemcpyDeviceToHost);

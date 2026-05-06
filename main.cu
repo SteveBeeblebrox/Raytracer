@@ -168,12 +168,13 @@ runtime.json (For configuring performance and parallelism):
         const float width = json::get<json::NumberT>(config, "resolution[0]", 1920.0f), height = json::get<json::NumberT>(config, "resolution[1]", 1080.0f);
         const unsigned int aa_level = json::get<json::NumberT>(config, "antialiasing", 1.0f);
         const std::string target = json::get<json::StringT>(runtime, "target", "cpu");
-        const unsigned int block_width = json::get<json::NumberT>(config, "gpu_tweaks.block_width", 16.0f), block_height = json::get<json::NumberT>(config, "gpu_tweaks.block_height", 16.0f);
+        const unsigned int block_width = json::get<json::NumberT>(runtime, "gpu_tweaks.block_width", 16.0f), block_height = json::get<json::NumberT>(runtime, "gpu_tweaks.block_height", 16.0f);
+        const bool partition_objects = json::get<json::BooleanT>(runtime, "gpu_tweaks.partition_objects", false), buffer_objects = json::get<json::BooleanT>(runtime, "gpu_tweaks.buffer_objects", false);
 
         std::unique_ptr<AbstractRayTracer> raytracer = nullptr;
         
         if(target == "gpu") {
-            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), block_width, block_height);
+            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), partition_objects, buffer_objects, block_width, block_height);
         } else {
             if(target != "cpu") {
                 util::warn("Unknown runtime target '%s' (Use 'cpu' or 'gpu')", target);
@@ -212,8 +213,12 @@ runtime.json (For configuring performance and parallelism):
                 std::cerr << "Target:             " << target << std::endl;
                 if(target == "gpu") {
                     std::cerr << "Block Size:         " << block_width << "x" << block_height << std::endl;
+                    std::cerr << "Partition Objects:  " << std::boolalpha << partition_objects << std::endl;
+                    std::cerr << "Buffer Objects:     " << std::boolalpha << buffer_objects << std::endl;
                 } else {
                     std::cerr << "Block Size:         N/A" << std::endl;
+                    std::cerr << "Partition Objects:  N/A" << std::endl;
+                    std::cerr << "Buffer Objects:     N/A" << std::endl;
                 }
                 std::cerr << "Resolution:         " << raytracer->WIDTH << "x" << raytracer->HEIGHT << std::endl;
                 std::cerr << "Antialiasing Level: " << raytracer->ANTIALIASING.LEVEL << " (" << (raytracer->ANTIALIASING.SAMPLES) << " samples)" << std::endl;
