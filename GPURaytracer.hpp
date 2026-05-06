@@ -7,7 +7,7 @@
 #include "AbstractRaytracer.hpp"
 #include "util.hpp"
 
-__global__ void dummy_kernel() {}
+__global__ void dummy_kernel_v1() {}
 
 template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
@@ -147,18 +147,18 @@ class GPURaytracer final : public AbstractRayTracer {
 
     public:
         const unsigned int BLOCK_WIDTH, BLOCK_HEIGHT;  
-        const bool PARTITION_OBJECTS, BUFFER_OBJECTS, LAYERED;
+        const bool PARTITION_OBJECTS, BUFFER_OBJECTS;
 
         GPURaytracer(
             const unsigned int width, const unsigned int height,
             const unsigned int antialiasing,
             const unsigned int shapec, Shape* shapev, const unsigned int dshapec,
             const unsigned int lightc, const Light* lightv,
-            const bool partition_objects = false, const bool buffer_objects = false, const bool layered = false,
+            const bool partition_objects = false, const bool buffer_objects = false,
             const unsigned int block_width = 16, const unsigned int block_height = 16
         ) : 
             AbstractRayTracer(width, height, antialiasing),
-            PARTITION_OBJECTS(partition_objects), BUFFER_OBJECTS(buffer_objects), LAYERED(layered),
+            PARTITION_OBJECTS(partition_objects), BUFFER_OBJECTS(buffer_objects),
             BLOCK_WIDTH(block_width), BLOCK_HEIGHT(block_height),
             SHAPEV(shapev), SHAPEC(shapec), DSHAPEC(dshapec), LIGHTC(lightc)
         {
@@ -172,7 +172,7 @@ class GPURaytracer final : public AbstractRayTracer {
             cudaMemcpy(this->_d_LIGHTV, lightv, sizeof(Light)*this->LIGHTC, cudaMemcpyHostToDevice);
         
             // Verify CUDA compiled correctly
-            dummy_kernel<<<1,1>>>();
+            dummy_kernel_v1<<<1,1>>>();
             cudaError_t error;
             if((error = cudaGetLastError()) != cudaSuccess || (error = cudaDeviceSynchronize()) != cudaSuccess) {
                 util::error("CUDA Error: %s (%s:%d)", cudaGetErrorString(error), __FILE__, __LINE__);

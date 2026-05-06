@@ -18,6 +18,7 @@
 #include "Types.hpp"
 #include "CPURaytracer.hpp"
 #include "GPURaytracer.hpp"
+#include "LayeredGPURaytracer.hpp"
 
 int main(int argc, const char** argv) {
     const std::string HELP_TEXT = std::string(util::string::trim(R"(
@@ -174,7 +175,11 @@ runtime.json (For configuring performance and parallelism):
         std::unique_ptr<AbstractRayTracer> raytracer = nullptr;
         
         if(target == "gpu") {
-            raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), partition_objects, buffer_objects, layered, block_width, block_height);
+            if(layered) {
+                raytracer = std::make_unique<LayeredGPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), partition_objects, buffer_objects, block_width, block_height);
+            } else {
+                raytracer = std::make_unique<GPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), partition_objects, buffer_objects, block_width, block_height);
+            }
         } else {
             if(target != "cpu") {
                 util::warn("Unknown runtime target '%s' (Use 'cpu' or 'gpu')", target);

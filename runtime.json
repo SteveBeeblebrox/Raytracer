@@ -6,6 +6,6 @@
         "block_height": 16,
         "partition_objects": true,
         "buffer_objects": true,
-        "layered": false
+        "layered": true
     }
 }
