@@ -27,10 +27,10 @@ struct LayeredIntersectionData {
     mm::vec3 direction; // of ray that generated intersection, need to store for shading
     mm::vec3 baseColor; // phong color w/ shadows but w/o reflections or refractions, on down pass, reflections and refractions get mixed in
     float source_refraction; // of ray that generated intersection
-    
+
     __device__ [[nodiscard]] static inline LayeredIntersectionData invalid() {
-        return {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f, 0.0f, 0.0f};
-    } 
+        return {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+    }
 };
 
 // Compute only the direct intersection color, no reflections/refractions
@@ -103,7 +103,7 @@ __global__ void cuda_raytracer_v2_merge_down(
             // Combine Fresnel weights with explicit material weights
             // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
             const float 
-                reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
+                reflectivity = material.reflectivity,
                 refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
             ;
     
@@ -149,7 +149,7 @@ __global__ void cuda_raytracer_v2_spawn_next(
             // Combine Fresnel weights with explicit material weights
             // I'm not sure the right way to combine the explicit weights with the Fresnel ones, but this looks good, so it's good enough
             const float 
-                reflectivity = mm::clamp(R + material.reflectivity, 0.0f, 1.0f),
+                reflectivity = material.reflectivity,
                 _refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
             ;
 
