@@ -51,7 +51,7 @@ __device__ [[nodiscard]] mm::vec3 cuda_shade_v2_base_color(
         }
     }
 
-    return color.map(mm::clamp, 0.0f, 1.0f);
+    return color;
 }
 
 __global__ void cuda_raytracer_v2_merge_down(
@@ -95,7 +95,7 @@ __global__ void cuda_raytracer_v2_merge_down(
             const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
             const mm::vec3 refraction = material.alpha < 1.0f && k >= 0.0f ? layers[layerStart + layerSize + idx*2 + 1].baseColor : mm::vec3(0.0f);
     
-            layers[layerStart + idx].baseColor = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*layers[layerStart + idx].baseColor;
+            layers[layerStart + idx].baseColor = (reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*layers[layerStart + idx].baseColor).map(mm::clamp, 0.0f, 1.0f);
         }
     }
 }
@@ -137,18 +137,22 @@ __global__ void cuda_raytracer_v2_spawn_next(
             ;
 
             // Spawn reflection
-            const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
-            const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
             if(reflectivity > 0.0f) {
+                const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
+                const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
                 layers[layerStart + layerSize + idx*2] = {reflection_intersection, reflection_ray.direction, cuda_shade_v2_base_color(reflection_intersection, reflection_ray, shapec, shapev, lightc, lightv), n1};
+            } else {
+                layers[layerStart + layerSize + idx*2] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
             }
-        
+            
             // Spawn refraction
             const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
-            const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
-            const Intersection refraction_intersection = Intersection::of(refraction_ray, shapec, shapev);
             if(material.alpha < 1.0f && k >= 0.0f) {
+                const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
+                const Intersection refraction_intersection = Intersection::of(refraction_ray, shapec, shapev);
                 layers[layerStart + layerSize + idx*2 + 1] = {refraction_intersection, refraction_ray.direction, cuda_shade_v2_base_color(refraction_intersection, refraction_ray, shapec, shapev, lightc, lightv), n2};
+            } else {
+                layers[layerStart + layerSize + idx*2 + 1] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
             }
         } else {
             layers[layerStart + layerSize + idx*2] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
