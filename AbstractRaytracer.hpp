@@ -9,7 +9,7 @@ class AbstractRayTracer : NonCopyable {
         unsigned char* _bytes;
     public:
         static const unsigned int CHANNELS = 4; /// RGBA
-        static const unsigned int ITERATIONS = 5;
+        static const unsigned int ITERATIONS = 3;
 
         const unsigned int WIDTH, HEIGHT;
 
