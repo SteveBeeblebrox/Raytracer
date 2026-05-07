@@ -7,6 +7,19 @@
 #include "AbstractRaytracer.hpp"
 #include "util.hpp"
 
+namespace colors {
+    __device__ const mm::vec3
+        BLACK = {0.0f, 0.0f, 0.0f},
+        WHITE = {1.0f, 1.0f, 1.0f},
+        RED = {1.0f, 0.0f, 0.0f},
+        GREEN = {0.0f, 1.0f, 0.0f},
+        BLUE = {0.0f, 0.0f, 1.0f},
+        CYAN = {0.0f, 1.0f, 1.0f},
+        MAGENTA = {1.0f, 0.0f, 1.0f},
+        YELLOW = {1.0f, 1.0f, 0.0f}
+    ;
+}
+
 __global__ void dummy_kernel_v2() {}
 
 struct LayeredIntersectionData {
@@ -14,6 +27,10 @@ struct LayeredIntersectionData {
     mm::vec3 direction; // of ray that generated intersection, need to store for shading
     mm::vec3 baseColor; // phong color w/ shadows but w/o reflections or refractions, on down pass, reflections and refractions get mixed in
     float source_refraction; // of ray that generated intersection
+    
+    __device__ [[nodiscard]] static inline LayeredIntersectionData invalid() {
+        return {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f, 0.0f, 0.0f};
+    } 
 };
 
 // Compute only the direct intersection color, no reflections/refractions
@@ -142,7 +159,7 @@ __global__ void cuda_raytracer_v2_spawn_next(
                 const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
                 layers[layerStart + layerSize + idx*2] = {reflection_intersection, reflection_ray.direction, cuda_shade_v2_base_color(reflection_intersection, reflection_ray, shapec, shapev, lightc, lightv), n1};
             } else {
-                layers[layerStart + layerSize + idx*2] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+                layers[layerStart + layerSize + idx*2] = LayeredIntersectionData::invalid();
             }
             
             // Spawn refraction
@@ -152,11 +169,11 @@ __global__ void cuda_raytracer_v2_spawn_next(
                 const Intersection refraction_intersection = Intersection::of(refraction_ray, shapec, shapev);
                 layers[layerStart + layerSize + idx*2 + 1] = {refraction_intersection, refraction_ray.direction, cuda_shade_v2_base_color(refraction_intersection, refraction_ray, shapec, shapev, lightc, lightv), n2};
             } else {
-                layers[layerStart + layerSize + idx*2 + 1] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+                layers[layerStart + layerSize + idx*2 + 1] = LayeredIntersectionData::invalid();
             }
         } else {
-            layers[layerStart + layerSize + idx*2] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
-            layers[layerStart + layerSize + idx*2 + 1] = {Intersection::invalid(), mm::vec3(0.0f), mm::vec3(0.0f), 1.0f};
+            layers[layerStart + layerSize + idx*2] = LayeredIntersectionData::invalid();
+            layers[layerStart + layerSize + idx*2 + 1] = LayeredIntersectionData::invalid();
         }
     }
 }
