@@ -3,9 +3,9 @@
     "target": "gpu",
     "gpu_tweaks": {
         "block_width": 16,
-        "block_height": 16,
-        "partition_objects": true,
-        "buffer_objects": true,
-        "layered": true
+        "block_height": 4,
+        "partition_objects": false,
+        "buffer_objects": false,
+        "layered": false
     }
 }

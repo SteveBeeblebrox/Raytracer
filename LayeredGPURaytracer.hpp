@@ -71,12 +71,21 @@ __device__ [[nodiscard]] mm::vec3 cuda_shade_v2_base_color(
     return color;
 }
 
-__global__ void cuda_raytracer_v2_merge_down(
+template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_merge_down(
     const unsigned int layerStart, const unsigned int layerSize,
     const unsigned int shapec, const Shape* __restrict__ shapev,
     const unsigned int lightc, const Light* __restrict__ lightv,
     LayeredIntersectionData* layers
 ) {
+    extern __shared__ Shape shapev_buf[];
+
+    if constexpr (BUFFER_OBJECTS) {
+        for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
+            shapev_buf[i] = shapev[i];
+        }
+        __syncthreads();
+    }
+
     // Index within layer
     const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -117,12 +126,21 @@ __global__ void cuda_raytracer_v2_merge_down(
     }
 }
 
-__global__ void cuda_raytracer_v2_spawn_next(
+template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_next(
     const unsigned int layerStart, const unsigned int layerSize,
     const unsigned int shapec, const Shape* __restrict__ shapev,
     const unsigned int lightc, const Light* __restrict__ lightv,
     LayeredIntersectionData* layers
 ) {
+    extern __shared__ Shape shapev_buf[];
+
+    if constexpr (BUFFER_OBJECTS) {
+        for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
+            shapev_buf[i] = shapev[i];
+        }
+        __syncthreads();
+    }
+
     // Index within layer
     const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
@@ -178,7 +196,7 @@ __global__ void cuda_raytracer_v2_spawn_next(
     }
 }
 
-__global__ void cuda_raytracer_v2_spawn_initial_view_rays(
+template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_initial_view_rays(
     const unsigned int WIDTH, const unsigned int HEIGHT,
     const float ANTIALIASING_SAMPLES, const float ANTIALIASING_STRIDE,
     const mm::vec3 LOCAL_X, const mm::vec3 LOCAL_Y, const mm::vec3 LOCAL_Z,
@@ -187,6 +205,15 @@ __global__ void cuda_raytracer_v2_spawn_initial_view_rays(
     const unsigned int lightc, const Light* __restrict__ lightv,
     LayeredIntersectionData* layers
 ) {
+    extern __shared__ Shape shapev_buf[];
+
+    if constexpr (BUFFER_OBJECTS) {
+        for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
+            shapev_buf[i] = shapev[i];
+        }
+        __syncthreads();
+    }
+
     const unsigned int px = blockIdx.x*blockDim.x + threadIdx.x;
     const unsigned int py = blockIdx.y*blockDim.y + threadIdx.y;
 
@@ -309,53 +336,121 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
             }
             // TODO: restore object buffering
             
-            // Launch initial view rays
-            cuda_raytracer_v2_spawn_initial_view_rays<<<
-                dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
-                dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT),
-                this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
-            >>>(
-                this->WIDTH, this->HEIGHT,
-                this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
-                localX, localY, localZ,
-                camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
-                this->SHAPEC, this->_d_SHAPEV,
-                this->LIGHTC, this->_d_LIGHTV,
-                this->_d_layers
-            );
-
-            // Propagate reflections and refractions from layer `bounce` into layer `bounce + 1`
-            for(unsigned int bounce = 0; bounce < AbstractRayTracer::ITERATIONS; bounce++) {
-                // Start offset of layer, size of this layer
-                const unsigned int
-                    layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
-                    layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
-                ;
-
-                cuda_raytracer_v2_spawn_next<<<(layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT), this->BLOCK_WIDTH*this->BLOCK_HEIGHT>>>(
-                    layerStart, layerSize,
-                    this->SHAPEC, this->_d_SHAPEV,
-                    this->LIGHTC, this->_d_LIGHTV,
-                    this->_d_layers
-                );
-            }
-
-            // Merge `baseColor` from relections and refractions in layer `bounce + 1` into layer `bounce`
-            for(unsigned int bounce = AbstractRayTracer::ITERATIONS - 1; ; bounce--) {
-                const unsigned int
-                    layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
-                    layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
-                ;
-
-                cuda_raytracer_v2_merge_down<<<(layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT), this->BLOCK_WIDTH*this->BLOCK_HEIGHT>>>(
-                    layerStart, layerSize,
+            if(this->BUFFER_OBJECTS) {
+                // Launch initial view rays
+                cuda_raytracer_v2_spawn_initial_view_rays<true><<<
+                    dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
+                    dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT),
+                    this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                >>>(
+                    this->WIDTH, this->HEIGHT,
+                    this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
+                    localX, localY, localZ,
+                    camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
                     this->SHAPEC, this->_d_SHAPEV,
                     this->LIGHTC, this->_d_LIGHTV,
                     this->_d_layers
                 );
 
-                if(bounce == 0) {
-                    break;
+                // Propagate reflections and refractions from layer `bounce` into layer `bounce + 1`
+                for(unsigned int bounce = 0; bounce < AbstractRayTracer::ITERATIONS; bounce++) {
+                    // Start offset of layer, size of this layer
+                    const unsigned int
+                        layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
+                        layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
+                    ;
+
+                    cuda_raytracer_v2_spawn_next<true><<<
+                        (layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT),
+                        this->BLOCK_WIDTH*this->BLOCK_HEIGHT, 
+                        this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                    >>>(
+                        layerStart, layerSize,
+                        this->SHAPEC, this->_d_SHAPEV,
+                        this->LIGHTC, this->_d_LIGHTV,
+                        this->_d_layers
+                    );
+                }
+
+                // Merge `baseColor` from relections and refractions in layer `bounce + 1` into layer `bounce`
+                for(unsigned int bounce = AbstractRayTracer::ITERATIONS - 1; ; bounce--) {
+                    const unsigned int
+                        layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
+                        layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
+                    ;
+
+                    cuda_raytracer_v2_merge_down<true><<<
+                        (layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT),
+                        this->BLOCK_WIDTH*this->BLOCK_HEIGHT,
+                        this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                    >>>(
+                        layerStart, layerSize,
+                        this->SHAPEC, this->_d_SHAPEV,
+                        this->LIGHTC, this->_d_LIGHTV,
+                        this->_d_layers
+                    );
+
+                    if(bounce == 0) {
+                        break;
+                    }
+                }
+            } else {
+                // Launch initial view rays
+                cuda_raytracer_v2_spawn_initial_view_rays<false><<<
+                    dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
+                    dim3(this->BLOCK_WIDTH, this->BLOCK_HEIGHT),
+                    this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                >>>(
+                    this->WIDTH, this->HEIGHT,
+                    this->ANTIALIASING.SAMPLES, this->ANTIALIASING.STRIDE,
+                    localX, localY, localZ,
+                    camera.hfov(this->WIDTH, this->HEIGHT), camera.vfov, camera.eye_pos,
+                    this->SHAPEC, this->_d_SHAPEV,
+                    this->LIGHTC, this->_d_LIGHTV,
+                    this->_d_layers
+                );
+
+                // Propagate reflections and refractions from layer `bounce` into layer `bounce + 1`
+                for(unsigned int bounce = 0; bounce < AbstractRayTracer::ITERATIONS; bounce++) {
+                    // Start offset of layer, size of this layer
+                    const unsigned int
+                        layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
+                        layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
+                    ;
+
+                    cuda_raytracer_v2_spawn_next<false><<<
+                        (layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT),
+                        this->BLOCK_WIDTH*this->BLOCK_HEIGHT, 
+                        this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                    >>>(
+                        layerStart, layerSize,
+                        this->SHAPEC, this->_d_SHAPEV,
+                        this->LIGHTC, this->_d_LIGHTV,
+                        this->_d_layers
+                    );
+                }
+
+                // Merge `baseColor` from relections and refractions in layer `bounce + 1` into layer `bounce`
+                for(unsigned int bounce = AbstractRayTracer::ITERATIONS - 1; ; bounce--) {
+                    const unsigned int
+                        layerStart = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*((1 << bounce) - 1),
+                        layerSize = (this->WIDTH*this->HEIGHT*this->ANTIALIASING.SAMPLES)*(1 << bounce)
+                    ;
+
+                    cuda_raytracer_v2_merge_down<false><<<
+                        (layerSize + (this->BLOCK_WIDTH*this->BLOCK_HEIGHT) - 1)/(this->BLOCK_WIDTH*this->BLOCK_HEIGHT),
+                        this->BLOCK_WIDTH*this->BLOCK_HEIGHT,
+                        this->BUFFER_OBJECTS ? sizeof(Shape)*this->SHAPEC : 0
+                    >>>(
+                        layerStart, layerSize,
+                        this->SHAPEC, this->_d_SHAPEV,
+                        this->LIGHTC, this->_d_LIGHTV,
+                        this->_d_layers
+                    );
+
+                    if(bounce == 0) {
+                        break;
+                    }
                 }
             }
 
