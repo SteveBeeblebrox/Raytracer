@@ -13,6 +13,7 @@
 #include <cctype>
 #include <functional>
 
+/// Assorted utility functions that aren't directly related to ray tracing or CUDA 
 namespace util {
     /// Read a file into a string (not ideal for large files!)
     [[nodiscard]] inline std::string cat(const char* path) {

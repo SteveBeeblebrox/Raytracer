@@ -2,6 +2,7 @@
 
 #include "AbstractRaytracer.hpp"
 
+/// Ray trace on the CPU
 class CPURaytracer final : public AbstractRayTracer {
     private:
         const unsigned int SHAPEC;
@@ -35,6 +36,7 @@ class CPURaytracer final : public AbstractRayTracer {
 
             color += material.ambient*0.05f;
 
+            // Combine phong shading for each light source
             for(const Light* light = this->LIGHTV; light < this->LIGHTV + this->LIGHTC; light++) {
                 if(float transmission = Light::transmission(p, *light, this->SHAPEC, this->SHAPEV); transmission > 0.0f) {
                     const mm::vec3
@@ -49,6 +51,7 @@ class CPURaytracer final : public AbstractRayTracer {
                 }
             }
             
+            // If reflective or transparent/refractive compute those colors
             if(material.reflectivity > 0.0f || material.alpha < 1.0f) {
                 // Flip if back face/inside
                 const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
@@ -83,7 +86,7 @@ class CPURaytracer final : public AbstractRayTracer {
                 color = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*color; 
             }
 
-            return color.map(mm::clamp, 0.0f, 1.0f);
+            return color.map(mm::clamp, 0.0f, 1.0f); // Clamp colors to [0,1] so that excessive light renders as white
         }
 
         virtual void run(const Camera& camera, const mm::vec3& localX, const mm::vec3& localY, const mm::vec3& localZ) override {
@@ -93,6 +96,7 @@ class CPURaytracer final : public AbstractRayTracer {
 
                     mm::vec3 color(0.0f, 0.0f, 0.0f);
 
+                    // Average samples
                     for(float dx = this->ANTIALIASING.STRIDE/2.0f; dx < 1.0f; dx += this->ANTIALIASING.STRIDE) {
                         for(float dy = this->ANTIALIASING.STRIDE/2.0f; dy < 1.0f; dy += this->ANTIALIASING.STRIDE) {
                             const float x = (2.0f*(px + dx) - (float) this->WIDTH)/(float) this->WIDTH*mm::tan(camera.hfov(this->WIDTH, this->HEIGHT)/2);
