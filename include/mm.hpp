@@ -57,6 +57,7 @@ namespace mm {
 
     __host__ __device__ constexpr inline float clamp(const float value, const float min, const float max) { return CUDA_IMPL(std::clamp(value, min, max), fminf(fmaxf(value, min), max)); }
 
+    /// A floating point vec3 type
     struct vec3 final {
         private:
             float _data[3];

@@ -7,6 +7,7 @@
 #include "AbstractRaytracer.hpp"
 #include "util.hpp"
 
+/// Color constants for debugging, unused
 namespace colors {
     __device__ const mm::vec3
         BLACK = {0.0f, 0.0f, 0.0f},
@@ -22,6 +23,7 @@ namespace colors {
 
 __global__ void dummy_kernel_v2() {}
 
+/// Represents stored data per layer, kept on GPU
 struct LayeredIntersectionData {
     Intersection intersection;
     mm::vec3 direction; // of ray that generated intersection, need to store for shading
@@ -33,7 +35,7 @@ struct LayeredIntersectionData {
     }
 };
 
-// Compute only the direct intersection color, no reflections/refractions
+// Compute only the direct intersection color, no reflections/refractions, a subset of CPU's shade()
 __device__ [[nodiscard]] mm::vec3 cuda_shade_v2_base_color(
     const Intersection& intersection, const Ray& ray,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -71,6 +73,7 @@ __device__ [[nodiscard]] mm::vec3 cuda_shade_v2_base_color(
     return color;
 }
 
+// Pop a layer and merge down
 template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_merge_down(
     const unsigned int layerStart, const unsigned int layerSize,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -79,6 +82,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_merge_down(
 ) {
     extern __shared__ Shape shapev_buf[];
 
+    // If enabled, copy objects to shared mem
     if constexpr (BUFFER_OBJECTS) {
         for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
             shapev_buf[i] = shapev[i];
@@ -89,6 +93,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_merge_down(
     // Index within layer
     const unsigned int idx = blockIdx.x*blockDim.x + threadIdx.x;
 
+    // Combine the reflections and refractions down a layer with the old base color, like part of CPU's shade()
     if(idx < layerSize) {
         const Intersection intersection = layers[layerStart + idx].intersection;
         if(intersection.is_valid()) {
@@ -126,6 +131,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_merge_down(
     }
 }
 
+// For each previous hit, spawn a reflection and refraction
 template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_next(
     const unsigned int layerStart, const unsigned int layerSize,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -134,6 +140,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_next(
 ) {
     extern __shared__ Shape shapev_buf[];
 
+    // If enabled, copy objects to shared mem
     if constexpr (BUFFER_OBJECTS) {
         for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
             shapev_buf[i] = shapev[i];
@@ -171,16 +178,16 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_next(
                 _refractivity = mm::clamp((1.0f - R)*(1.0f - material.alpha), 0.0f, 1.0f)
             ;
 
-            // Spawn reflection
+            // Spawn reflection and store in layers
             if(reflectivity > 0.0f) {
                 const Ray reflection_ray(p, mm::vec3::normalize(I - 2.0f*N*mm::vec3::dot(I, N)));
                 const Intersection reflection_intersection = Intersection::of(reflection_ray, shapec, shapev);
                 layers[layerStart + layerSize + idx*2] = {reflection_intersection, reflection_ray.direction, cuda_shade_v2_base_color(reflection_intersection, reflection_ray, shapec, shapev, lightc, lightv), n1};
             } else {
-                layers[layerStart + layerSize + idx*2] = LayeredIntersectionData::invalid();
+                layers[layerStart + layerSize + idx*2] = LayeredIntersectionData::invalid(); // Since layers don't get cleared, need to fill with empty data if no hit
             }
             
-            // Spawn refraction
+            // Spawn refraction and store in layers
             const float k = 1.0f - (n1/n2)*(n1/n2)*(1.0f - mm::vec3::dot(N, I)*mm::vec3::dot(N, I));
             if(material.alpha < 1.0f && k >= 0.0f) {
                 const Ray refraction_ray(p, (n1/n2)*I - N*((n1/n2)*mm::vec3::dot(N, I) + mm::sqrt(k)));
@@ -196,6 +203,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_next(
     }
 }
 
+/// Spawn a view ray like the foreach x,y of CPU version
 template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_initial_view_rays(
     const unsigned int WIDTH, const unsigned int HEIGHT,
     const float ANTIALIASING_SAMPLES, const float ANTIALIASING_STRIDE,
@@ -207,6 +215,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_initial_vi
 ) {
     extern __shared__ Shape shapev_buf[];
 
+    // If enabled, copy objects to shared mem
     if constexpr (BUFFER_OBJECTS) {
         for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
             shapev_buf[i] = shapev[i];
@@ -229,12 +238,14 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v2_spawn_initial_vi
                 const Ray ray(EYE_POS, mm::vec3::normalize(LOCAL_Z + x*LOCAL_X - y*LOCAL_Y));
                 const Intersection intersection = Intersection::of(ray, shapec, shapev);
 
+                // Instead of tracing to completion, only do first hit and store for later
                 layers[idx + sampleIdx++] = {intersection, ray.direction, cuda_shade_v2_base_color(intersection, ray, shapec, shapev, lightc, lightv), 1.0f};
             }
         }
     }
 }
 
+/// Average samples and write to the image array as the last step
 __global__ void cuda_raytracer_v2_finalize(
     const unsigned int WIDTH, const unsigned int HEIGHT,
     const float ANTIALIASING_SAMPLES,
@@ -297,7 +308,7 @@ class LayeredGPURaytracer final : public AbstractRayTracer {
             cudaMalloc(&this->_d_LIGHTV, sizeof(Light)*this->LIGHTC);
 
             cudaMalloc(&this->_d_layers, sizeof(LayeredIntersectionData)*(
-                // sum(HEIGHT*WIDTH*SAMPLES*pow(2, layer) foreach layer in 0..ITERATIONS)
+                // sum(HEIGHT*WIDTH*SAMPLES*pow(2, layer) foreach layer in 0..ITERATIONS), full binary tree
                 (this->HEIGHT*this->WIDTH*this->ANTIALIASING.SAMPLES)*((1 << (AbstractRayTracer::ITERATIONS + 1)) - 1)
             ));
 
