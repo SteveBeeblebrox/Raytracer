@@ -32,6 +32,10 @@ METRICS = ",".join([
     "lts__t_sector_hit_rate.pct",                         # L2 hit rate
     "l1tex__t_sector_hit_rate.pct",                       # L1 hit rate
     "gpu__time_duration.sum",
+
+    "smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active",
+    "smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active",
+    "sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active"
 ])
 os.makedirs("_bench_configs",  exist_ok=True)
 os.makedirs("_bench_runtimes", exist_ok=True)
@@ -136,7 +140,10 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
         "sm__warps_active.avg.pct_of_peak_sustained_active",
         "dram__throughput.avg.pct_of_peak_sustained_elapsed",
         "lts__t_sector_hit_rate.pct",
-        "l1tex__t_sector_hit_rate.pct"
+        "l1tex__t_sector_hit_rate.pct",
+        "smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active",
+        "smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active",
+        "sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active"
     ])
 
     for (p, b, l), rt in zip(GPU_COMBOS, GPU_RUNTIMES):
@@ -199,7 +206,10 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
                     metrics.get("sm__warps_active.avg.pct_of_peak_sustained_active", 0),
                     metrics.get("dram__throughput.avg.pct_of_peak_sustained_elapsed", 0),
                     metrics.get("lts__t_sector_hit_rate.pct", 0),
-                    metrics.get("l1tex__t_sector_hit_rate.pct", 0)
+                    metrics.get("l1tex__t_sector_hit_rate.pct", 0),
+                    metrics.get("smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active", 0),
+                    metrics.get("smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active", 0),
+                    metrics.get("sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active", 0)
                 ])
                 csvfile.flush()
                 print(f"    Occ: {metrics.get('sm__warps_active.avg.pct_of_peak_sustained_active', 0):.2f}% | "

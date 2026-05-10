@@ -1,0 +1,9 @@
+num_spheres
+width
+height
+runtime
+kernel_time_ms
+sm__warps_active.avg.pct_of_peak_sustained_active
+dram__throughput.avg.pct_of_peak_sustained_elapsed
+lts__t_sector_hit_rate.pct
+l1tex__t_sector_hit_rate.pct
