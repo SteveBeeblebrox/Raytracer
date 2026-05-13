@@ -25,6 +25,7 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
         json.dump({"schema": "runtime", "target": "cpu"}, f)
 
     for n_spheres in SPHERE_COUNTS:
+        #limit the amount of spheres the CPU can use because it is veryyyyyyyy slow
         if n_spheres > MAX_CPU_SPHERES:
             break
         for (w, h) in RESOLUTIONS:
@@ -32,7 +33,7 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
             cfg_path = f"_bench_configs/s{n_spheres}_{w}x{h}.json"
             with open(cfg_path, "w") as f:
                 json.dump(config, f)
-            for run in range(RUNS_PER_CPU_CONFIG):   # fewer runs for CPU since it's slow
+            for run in range(RUNS_PER_CPU_CONFIG):
                 result = subprocess.run(
                     [BINARY, cfg_path, cpu_rt_path],
                     input="r\nq\n", capture_output=True, text=True
@@ -50,8 +51,9 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
                     writer.writerow([n_spheres, w, h, run, time_ms, "cpu"])
                     csvfile.flush()
 
-    # all 8 GPU combos
+    # do all the GPU combos
     for (p, b, l), rt in zip(GPU_COMBOS, GPU_RUNTIMES):
+        #just regen runtimes and config each time since it doesnt take long and makes it easier to make changes to the runtimes/configs between runs
         rt_json = make_runtime(rt, partition=p, buffer=b, layered=l)
         rt_path = f"_bench_runtimes/{rt}.json"
         with open(rt_path, "w") as f:

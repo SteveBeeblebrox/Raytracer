@@ -8,63 +8,27 @@ import os
 from itertools import product
 from plot_config import GPU_COMBOS, GPU_RUNTIMES, RESOLUTIONS, SPHERE_COUNTS, MAX_CPU_SPHERES, BINARY, DYNAMIC_RATIO, RUNS_PER_CPU_CONFIG, RUNS_PER_GPU_CONFIG, make_sphere, make_config, make_runtime, runtime_name
 
-# BINARY      = "./raytracer"
 OUTPUT_CSV  = "profile_results.csv"
-# GPU_RUNTIMES = ["gpu_base", "gpu_partition", "gpu_buffer", "gpu_both"]
-# GPU_LABELS   = {"gpu_base": "GPU Base", "gpu_partition": "GPU Partition",
-#                 "gpu_buffer": "GPU Buffer", "gpu_both": "GPU Both"}
 
-# # one run per config since nvprof replays kernels internally — more runs = much slower
-# SPHERE_COUNTS = [1, 5, 10, 25, 50, 100, 200, 500]
+#https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#metrics-structure
+#https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#launch-metrics
+#ncu -query-metrics
+#had some LLM help to find and figure out how the metrics all worked
 
-# METRICS = ",".join([
-#     "achieved_occupancy",        # occupancy
-#     "gld_throughput",            # global load throughput
-#     "gst_throughput",            # global store throughput
-#     "dram_read_throughput",      # memory bandwidth read
-#     "dram_write_throughput",     # memory bandwidth write
-#     "l2_read_hit_rate",          # L2 cache hit rate
-#     "l1_cache_global_hit_rate",  # L1 cache hit rate
-# ])
 METRICS = ",".join([
-    "sm__warps_active.avg.pct_of_peak_sustained_active",  # occupancy-ish
-    "dram__throughput.avg.pct_of_peak_sustained_elapsed",
+    "sm__warps_active.avg.pct_of_peak_sustained_active",  # occupancy-ish?, average percentage of max possble warps that were active on SM
+    "dram__throughput.avg.pct_of_peak_sustained_elapsed", # util of DRAM compared to max bandwidth
     "lts__t_sector_hit_rate.pct",                         # L2 hit rate
     "l1tex__t_sector_hit_rate.pct",                       # L1 hit rate
-    "gpu__time_duration.sum",
+    "gpu__time_duration.sum",                             # Literally just timing the kernels themselves
 
-    "smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active",
-    "smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active",
-    "sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active"
+    "smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active", # how much are you waiting on memory
+    "smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active", # how much are you waiting on math
+    "smsp__thread_inst_executed_per_inst_executed.avg",  #Warp efficiency? number of active threads per warp instruction, also only ever get 0
+    "smsp__sass_average_branch_targets_threads_uniform.avg" #divergance? Only evevr get 0 for it though
 ])
 os.makedirs("_bench_configs",  exist_ok=True)
 os.makedirs("_bench_runtimes", exist_ok=True)
-
-# def parse_nvprof_csv(stderr_text):
-#     """
-#     nvprof --csv outputs lines like:
-#     "Device","Metric Name","Metric Description","Min","Max","Mean"
-#     "TITAN RTX","achieved_occupancy","Achieved Occupancy",0.5,0.6,0.55
-#     Lines starting with == are info/header lines to skip.
-#     """
-#     metrics = {}
-#     in_csv = False
-#     for line in stderr_text.splitlines():
-#         if line.startswith("=="):
-#             continue
-#         if "Metric Name" in line:
-#             in_csv = True
-#             continue
-#         if in_csv and line.strip():
-#             try:
-#                 parts = [p.strip().strip('"') for p in line.split(",")]
-#                 if len(parts) >= 6:
-#                     metric_name = parts[1]
-#                     mean_val    = float(parts[5])
-#                     metrics[metric_name] = mean_val
-#             except (ValueError, IndexError):
-#                 continue
-#     return metrics
 
 import csv
 import io
@@ -143,7 +107,9 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
         "l1tex__t_sector_hit_rate.pct",
         "smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active",
         "smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active",
-        "sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active"
+        "sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active",
+        "smsp__thread_inst_executed_per_inst_executed.avg",
+        "smsp__sass_average_branch_targets_threads_uniform.avg"
     ])
 
     for (p, b, l), rt in zip(GPU_COMBOS, GPU_RUNTIMES):
@@ -209,7 +175,9 @@ with open(OUTPUT_CSV, "w", newline="") as csvfile:
                     metrics.get("l1tex__t_sector_hit_rate.pct", 0),
                     metrics.get("smsp__warps_issue_stalled_long_scoreboard.avg.pct_of_peak_sustained_active", 0),
                     metrics.get("smsp__warps_issue_stalled_math_pipe_throttle.avg.pct_of_peak_sustained_active", 0),
-                    metrics.get("sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active", 0)
+                    metrics.get("sm__inst_executed_pipe_fp32.avg.pct_of_peak_sustained_active", 0),
+                    metrics.get("smsp__thread_inst_executed_per_inst_executed.avg",0),
+                    metrics.get("smsp__sass_average_branch_targets_threads_uniform.avg",0)
                 ])
                 csvfile.flush()
                 print(f"    Occ: {metrics.get('sm__warps_active.avg.pct_of_peak_sustained_active', 0):.2f}% | "
