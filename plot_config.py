@@ -75,9 +75,9 @@ def runtime_name(partition, buffer, layered):
 #all combination series
 #GPU_COMBOS   = [(p, b, l) for p, b, l in product([False, True], repeat=3)]
 #Ablation study series
-#GPU_COMBOS = [(False, False, False), (True, False, False), (True, True, False), (True, True, True)]
+GPU_COMBOS = [(False, False, False), (True, False, False), (True, True, False), (True, True, True)]
 #use for making limited plots
-GPU_COMBOS = [(True, True, False), (True, True, True)]
+#GPU_COMBOS = [(True, True, False), (True, True, True)]
 GPU_RUNTIMES = [runtime_name(*combo) for combo in GPU_COMBOS]
 
 GPU_LABELS = {
@@ -102,9 +102,9 @@ GPU_COLORS = {
     "gpu_partition_buffer_layered":"#17becf",
 }
 
-#RESOLUTIONS   = [(320, 180), (640, 360), (1280, 720), (1920, 1080)]
-RESOLUTIONS = [(1920, 1080)]
-RES_COLORS   = ["#1f77b4"]#, "#ff7f0e", "#2ca02c", "#9467bd"]
+RESOLUTIONS   = [(320, 180), (640, 360), (1280, 720), (1920, 1080)]
+#RESOLUTIONS = [(1920, 1080)]
+RES_COLORS   = ["#1f77b4", "#ff7f0e", "#2ca02c", "#9467bd"]
 RES_COLOR_MAP = dict(zip(RESOLUTIONS, RES_COLORS))
 SPHERE_COUNTS = [1, 5, 10, 25, 50, 100, 200, 500]
 

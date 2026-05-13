@@ -1,4 +1,3 @@
-#!/home/andromeda/Raytracer/venv/bin/python3
 import subprocess
 import json
 import csv
@@ -14,6 +13,7 @@ OUTPUT_CSV  = "profile_results.csv"
 #https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html#launch-metrics
 #ncu -query-metrics
 #had some LLM help to find and figure out how the metrics all worked
+#SEE available_metrics.txt!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
 METRICS = ",".join([
     "sm__warps_active.avg.pct_of_peak_sustained_active",  # occupancy-ish?, average percentage of max possble warps that were active on SM

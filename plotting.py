@@ -1,4 +1,3 @@
-#!/home/andromeda/Raytracer/venv/bin/python3
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -351,4 +350,66 @@ fig5.update_layout(
 
 fig5.write_html("benchmark_cpu.html")
 
-print("Saved benchmark_cpu_vs_gpu.html, benchmark_speedup.html, benchmark_gpu_variants.html, benchmark_by_resolution.html", "Saved benchmark_cpu.html")
+# ═══════════════════════════════════════════════════════════════════════════════
+# FIGURE 9 FIX — Speedup over CPU vs resolution at fixed sphere count
+# ═══════════════════════════════════════════════════════════════════════════════
+FIXED_SPHERES_SPEEDUP = 25
+TARGET_RT = "gpu_partition_buffer"
+
+pixel_labels = {w*h: f"{w}x{h}" for (w, h) in RESOLUTIONS}
+pixel_vals   = sorted([w*h for (w, h) in RESOLUTIONS])
+
+# get CPU baseline per resolution at fixed sphere count
+cpu_base = df_avg[
+    (df_avg["runtime"]     == "cpu") &
+    (df_avg["num_spheres"] == FIXED_SPHERES_SPEEDUP)
+][["resolution", "time_ms"]].rename(columns={"time_ms": "cpu_ms"})
+
+# get target GPU variant at same sphere count
+gpu_data = df_avg[
+    (df_avg["runtime"]     == TARGET_RT) &
+    (df_avg["num_spheres"] == FIXED_SPHERES_SPEEDUP)
+][["resolution", "time_ms"]].rename(columns={"time_ms": "gpu_ms"})
+
+merged = pd.merge(cpu_base, gpu_data, on="resolution")
+merged["speedup"] = merged["cpu_ms"] / merged["gpu_ms"]
+merged["pixels"]  = merged["resolution"].map({f"{w}x{h}": w*h for (w, h) in RESOLUTIONS})
+merged = merged.sort_values("pixels")
+
+fig_fix = go.Figure()
+fig_fix.add_trace(go.Scatter(
+    x=merged["pixels"],
+    y=merged["speedup"],
+    mode="lines+markers",
+    name=GPU_LABELS[TARGET_RT],
+    line=dict(color=GPU_COLORS[TARGET_RT], width=3),
+    marker=dict(size=10),
+    showlegend=True,
+    hovertemplate="Resolution: %{customdata}<br>Speedup: %{y:.1f}×<extra></extra>",
+    customdata=[pixel_labels[p] for p in merged["pixels"]],
+))
+
+fig_fix.update_xaxes(
+    title_text="Pixel Area (width × height)",
+    title_font=dict(size=15), tickfont=dict(size=13),
+    tickvals=pixel_vals,
+    ticktext=[pixel_labels[p] for p in pixel_vals],
+)
+fig_fix.update_yaxes(
+    title_text="Speedup over CPU (×)",
+    title_font=dict(size=15), tickfont=dict(size=13),
+)
+fig_fix.update_layout(
+    title=dict(
+        text=f"Speedup over CPU vs Resolution ({FIXED_SPHERES_SPEEDUP} Spheres)",
+        font=dict(size=20)
+    ),
+    legend=dict(title=dict(text="GPU Variant", font=dict(size=13)), font=dict(size=12), borderwidth=1),
+    template="plotly_white",
+    hovermode="x unified",
+    width=750, height=480,
+)
+
+fig_fix.write_html("benchmark_speedup_vs_resolution.html")
+
+print("Saved benchmark_cpu_vs_gpu.html, benchmark_speedup.html, benchmark_gpu_variants.html, benchmark_by_resolution.html, benchmark_cpu.html benchmark_speedup_vs_resolution.html")
