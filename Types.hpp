@@ -2,16 +2,19 @@
 
 #include "include/mm.hpp"
 
+/// A ray is represented by an origin point and a direction vector
+/// NOTE: The ray is always offset a small step from the passed in origin point to prevent it from hitting the surface it was spawned on.
 struct Ray final {
     mm::vec3 direction;
     mm::vec3 origin;
     __host__ __device__ inline Ray(const mm::vec3 _origin, const mm::vec3 _direction, float _step = 0.001f) : direction(_direction.normalize()), origin(_origin + direction*_step) {} // Offset slightly to avoid rounding issues
 };
 
+/// A collection of camera settings that control the view of the scene. Horizontal FOV is computed from the vertical FOV.
+/// This camera acts like an arc ball. When moved, it orients the view to look at a specific point from that location (In this case the world center)
 struct Camera final {
     mm::vec3 eye_pos;
     mm::vec3 look_pos = {0.0f, 0.0f, 0.0f};
-    mm::vec3 up_vector = {0.0f, 1.0f, 0.0f};
     float vfov = mm::PI/4.0f;
 
     // Horizontal FOV determined by vfov and size
@@ -20,6 +23,11 @@ struct Camera final {
     }
 };
 
+/// A material for Phong shading (i.e. not PBR)
+/// The diffuse color is the color of the object when lit, the ambient color is the color when shaded (so things never appear fully black), and specular is the
+/// color of the shininess (Different from reflection, this is what you see when there's a bright but not sharp spot on a shiny object due to a light opposite you).
+/// Reflectivity controls how much of a real reflection actually shows up. If non-zero, a reflection ray must be spawned to compute the color reflected on the surface.
+// Alpha controls transparency. The index of the refraction controls how much light bends going through the interface at a semi-transparent material (default 1).
 struct Material final {
     mm::vec3 diffuse = {1.0f, 1.0f, 1.0f};
     mm::vec3 ambient = {0.2f, 0.2f, 0.2f};
@@ -31,8 +39,12 @@ struct Material final {
     float alpha = 1.0f;
 };
 
+// Need to forward declare this...
 struct Intersection;
 
+/// Represents a shape in the world
+/// Game engines usually use triangles, but we use spheres and infinite planes for simplicity.
+/// NOTE: Inheritance might make intuitive sense for this type, but we use a tagged union so that it can be memcpy'ed as-is to CUDA
 struct Shape final {
     enum {PLANE, SPHERE} type;
     Material material;
@@ -50,6 +62,9 @@ struct Shape final {
     __host__ __device__ [[nodiscard]] inline Intersection intersect(const Ray& ray) const;
 };
 
+/// A struct to store the hit result of a ray
+/// Tracks the position, hit normal, and hit material
+/// Use `Intersection::invalid()` to represent a lack of a hit
 struct Intersection final {
     mm::vec3 pos;
     mm::vec3 normal;
@@ -80,6 +95,7 @@ struct Intersection final {
     }
 };
 
+/// Represents a point light (i.e. not a global, cone, or bar light) in the world, colors correspond to those in Material
 struct Light final {
     mm::vec3 pos = {5.0f, 5.0f, 5.0f};
     mm::vec3 diffuse = {1.0f, 1.0f, 1.0f};
@@ -124,6 +140,7 @@ struct Light final {
     }
 };
 
+/// Checks if a ray intersects with a given shape, just a bit of math
 __host__ __device__ inline Intersection Shape::intersect(const Ray& ray) const {
     switch(this->type) {
         case PLANE: {

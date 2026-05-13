@@ -99,6 +99,7 @@ runtime.json (For configuring performance and parallelism):
     }
 
     if(argc == 3) {
+        // Load in configuration, none of this is too relevant to raytracing or parallelism 
         json::ValueT config = json::parse(util::cat(argv[1]));
         json::ValueT runtime = json::parse(util::cat(argv[2]));
 
@@ -174,6 +175,7 @@ runtime.json (For configuring performance and parallelism):
 
         std::unique_ptr<AbstractRayTracer> raytracer = nullptr;
         
+        // Pick implementation
         if(target == "gpu") {
             if(layered) {
                 raytracer = std::make_unique<LayeredGPURaytracer>(width, height, aa_level, shapes.size(), shapes.data(), dshapec, lights.size(), lights.data(), partition_objects, buffer_objects, block_width, block_height);
@@ -200,6 +202,7 @@ runtime.json (For configuring performance and parallelism):
             util::warn("No lights defined in '%s'!", argv[1]);
         }
 
+        // Enter REPL loop
         std::cerr << "\033[96;1m>\033[0m ";
         for (std::string line; std::getline(std::cin, line); std::cerr << "\033[96;1m>\033[0m ") {
             line = util::string::trim(line);

@@ -4,19 +4,22 @@
 
 #include "Types.hpp"
 
+/// A base class for our CPU and GPU raytracers
 class AbstractRayTracer : NonCopyable {
     protected:
+        /// Row major pixel data
         unsigned char* _bytes;
     public:
         static const unsigned int CHANNELS = 4; /// RGBA
-        static const unsigned int ITERATIONS = 3;
+        static const unsigned int ITERATIONS = 3; // Max number of reflections in reflections before recursion gets cut off
 
         const unsigned int WIDTH, HEIGHT;
 
+        // AA reduces sharp pixel lines on the edge of objects by averaging out multiple rays per pixel
         const struct {
             const unsigned int LEVEL; // Kept for debug info, otherwise use derived values
-            const float SAMPLES;
-            const float STRIDE;
+            const float SAMPLES; // Samples is (level+1)**2, so 0 -> 1 sample, 1 -> 2 samples, 2 -> 9 samples
+            const float STRIDE; // Space between aa rays
         } ANTIALIASING;
         
         AbstractRayTracer(const unsigned int width, const unsigned int height, const unsigned int antialiasing) : 
@@ -30,6 +33,7 @@ class AbstractRayTracer : NonCopyable {
             delete[] this->_bytes;
         }
 
+        /// Derived classes override this, local vectors form coordinate system for screen relative to view
         virtual void run(const Camera& camera, const mm::vec3& localX, const mm::vec3& localY, const mm::vec3& localZ) = 0;
         
         void run(const Camera& camera) {
@@ -44,10 +48,12 @@ class AbstractRayTracer : NonCopyable {
             this->run(camera, localX, localY, localZ);
         }
 
+        /// Gets the raw image bytes, invalid if not `run()` at least once
         [[nodiscard]] virtual const unsigned char* bytes() const final {
             return this->_bytes;
         }
 
+        /// Gets the size of `bytes()`
         [[nodiscard]] virtual unsigned int size() const final {
             return this->WIDTH*this->HEIGHT*AbstractRayTracer::CHANNELS;
         }

@@ -1,5 +1,7 @@
 **/.build
 **/.local
+*.png
+!render.png
 *.ppm
 *.log
 raytracer

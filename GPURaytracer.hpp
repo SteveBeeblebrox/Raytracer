@@ -9,6 +9,7 @@
 
 __global__ void dummy_kernel_v1() {}
 
+/// Use template meta programming to unwind recursion, mostly the same as CPU function but `bounces` is a template parameter not a normal one
 template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -29,6 +30,7 @@ template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
 
     color += material.ambient*0.05f;
 
+    // Combine phong shading for each light source
     for(const Light* light = lightv; light < lightv + lightc; light++) {
         if(float transmission = Light::transmission(p, *light, shapec, shapev); transmission > 0.0f) {
             const mm::vec3
@@ -43,6 +45,7 @@ template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
         }
     }
     
+    // If reflective or transparent/refractive compute those colors
     if(material.reflectivity > 0.0f || material.alpha < 1.0f) {
         // Flip if back face/inside
         const bool front_facing = mm::vec3::dot(I, intersection.normal) < 0.0f;
@@ -77,9 +80,10 @@ template<unsigned int bounces> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1(
         color = reflection*reflectivity + refraction*refractivity + (1.0f - reflectivity - refractivity)*color; 
     }
 
-    return color.map(mm::clamp, 0.0f, 1.0f);
+    return color.map(mm::clamp, 0.0f, 1.0f); // Clamp colors to [0,1] so that excessive light renders as white
 }
 
+/// Provide a base case to halt recursion
 template<> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1<AbstractRayTracer::ITERATIONS + 1>(
     const Intersection& intersection, const Ray& ray, const float source_refraction,
     const unsigned int shapec, const Shape* __restrict__ shapev,
@@ -88,6 +92,7 @@ template<> __device__ [[nodiscard]] mm::vec3 cuda_shade_v1<AbstractRayTracer::IT
     return mm::vec3(0.0f, 0.0f, 0.0f);
 }
 
+/// This kernel acts like the forall x,y loop of the CPU version
 template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v1(
     const unsigned int WIDTH, const unsigned int HEIGHT,
     const float ANTIALIASING_SAMPLES, const float ANTIALIASING_STRIDE,
@@ -99,6 +104,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v1(
 ) {
     extern __shared__ Shape shapev_buf[];
 
+    // If enabled, copy objects to shared mem
     if constexpr (BUFFER_OBJECTS) {
         for(int i = threadIdx.y*blockDim.x + threadIdx.x; i < shapec; i += blockDim.x*blockDim.y) {
             shapev_buf[i] = shapev[i];
@@ -113,6 +119,7 @@ template<bool BUFFER_OBJECTS> __global__ void cuda_raytracer_v1(
         const unsigned int idx = (py*WIDTH + px)*AbstractRayTracer::CHANNELS;
         mm::vec3 color(0.0f, 0.0f, 0.0f);
 
+        // Average samples
         for(float dx = ANTIALIASING_STRIDE/2.0f; dx < 1.0f; dx += ANTIALIASING_STRIDE) {
             for(float dy = ANTIALIASING_STRIDE/2.0f; dy < 1.0f; dy += ANTIALIASING_STRIDE) {
                 const float x = (2.0f*(px + dx) - (float) WIDTH)/(float) WIDTH*mm::tan(HFOV/2);
@@ -162,6 +169,8 @@ class GPURaytracer final : public AbstractRayTracer {
             BLOCK_WIDTH(block_width), BLOCK_HEIGHT(block_height),
             SHAPEV(shapev), SHAPEC(shapec), DSHAPEC(dshapec), LIGHTC(lightc)
         {
+            // Initialize GPU data
+
             cudaStreamCreate(&this->_stream);
             cudaMalloc(&this->_d_bytes, this->size());
 
@@ -201,7 +210,7 @@ class GPURaytracer final : public AbstractRayTracer {
                 cudaMemcpy(this->_d_SHAPEV, this->SHAPEV, sizeof(Shape)*this->SHAPEC, cudaMemcpyHostToDevice);
             }
             
-            if(this->BUFFER_OBJECTS) {
+            if(this->BUFFER_OBJECTS) { // Convert runtime boolean to templated function
                 // Launch kernel
                 cuda_raytracer_v1<true><<<
                     dim3((this->WIDTH + this->BLOCK_WIDTH - 1)/this->BLOCK_WIDTH, (this->HEIGHT + this->BLOCK_HEIGHT - 1)/this->BLOCK_HEIGHT),
