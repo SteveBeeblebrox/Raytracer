@@ -10,3 +10,4 @@ _bench_configs
 _bench_runtimes
 *.html
 *.csv
+__pycache__
